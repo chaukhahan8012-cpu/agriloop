@@ -1,154 +1,93 @@
 import streamlit as st
 import pandas as pd
+import random
+import time
+from datetime import datetime
 
-st.set_page_config(page_title="AgriLoop MVP", layout="wide")
+st.set_page_config(page_title="AgriLoop MVP - 5 Steps", layout="wide", page_icon="🌾")
 
-# ========================
-# CẤU HÌNH GIÁ
-# ========================
-PRICE_PER_TON = 800000
-PRICE_BUY_PER_TON = 650000
-PLATFORM_FEE_RATE = 0.05
+# ==========================
+# CẤU HÌNH CSS & STYLE
+# ==========================
+st.markdown("""
+    <style>
+    .grab-card { border-left: 5px solid #00b14f; padding: 10px; background: #f9f9f9; margin-bottom: 10px; border-radius: 5px; }
+    .layer1-card { border-left: 5px solid #fbbc05; padding: 10px; background: #fffde7; margin-bottom: 10px; }
+    .layer2-card { border-left: 5px solid #4285f4; padding: 10px; background: #e8f0fe; margin-bottom: 10px; }
+    .metric-box { background-color: #e8f5e9; padding: 15px; border-radius: 8px; text-align: center; }
+    </style>
+""", unsafe_allow_html=True)
 
-# ========================
-# SESSION
-# ========================
+# ==========================
+# BIẾN HỆ THỐNG (GIẢ LẬP)
+# ==========================
+FEE_FIRST_MILE = 150000     # 150k/chuyến xe máy cày/ba gác
+PRICE_MARKET_TRANSPORT = 3000000 # Giá thị trường chặng dài giả định
+RATE_LAYER_1 = 0.8          # Xe rỗng chiều về (80%)
+RATE_LAYER_2 = 0.9          # 3PL Đối tác (90%)
+
 if "orders" not in st.session_state:
     st.session_state.orders = []
+if "first_mile_trips" not in st.session_state:
+    st.session_state.first_mile_trips = []
 
-# ========================
-# SIDEBAR
-# ========================
-st.sidebar.title("AgriLoop MVP")
+# ==========================
+# SIDEBAR QUẢN LÝ VAI TRÒ
+# ==========================
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2664/2664552.png", width=80)
+st.sidebar.title("AgriLoop Ecosystem")
 role = st.sidebar.radio(
-    "Chọn vai trò:",
-    ["Nhà máy", "Đại lý", "HTX vận tải", "Admin"]
+    "Đăng nhập với vai trò:",
+    [
+        "🏭 1. Nhà máy (Đầu ra)", 
+        "🏪 2. Đại lý (Hub/QC)", 
+        "🚜 3. Nông dân/HTX (First-mile)", 
+        "🚛 4. Đối tác Vận tải (Middle-mile)", 
+        "🏦 5. Admin & Tài chính"
+    ]
 )
 
-st.title(f"AgriLoop - {role}")
+st.title(f"{role.split('.')[1].strip()}")
 
-# =================================================
-# NHÀ MÁY
-# =================================================
-if role == "Nhà máy":
+# =====================================================
+# VAI TRÒ 1: NHÀ MÁY (BƯỚC 1 & BƯỚC 5)
+# =====================================================
+if "Nhà máy" in role:
+    st.header("Bước 1: Kích hoạt nhu cầu (Demand Activation)")
+    
+    with st.form("factory_order"):
+        col1, col2, col3 = st.columns(3)
+        factory_name = col1.selectbox("Nhà máy", ["NM Điện sinh khối ĐBSCL", "NM Viên nén Hậu Giang", "NM Phân bón hữu cơ"])
+        product = col2.selectbox("Loại phụ phẩm", ["Rơm cuộn", "Rơm rời", "Vỏ trấu"])
+        weight = col3.number_input("Khối lượng (Tấn)", min_value=10, value=50)
+        
+        col4, col5 = st.columns(2)
+        max_price = col4.number_input("Giá trần đề xuất (VNĐ/Tấn)", value=850000, step=50000)
+        deadline = col5.date_input("Hạn chót giao hàng")
+        
+        if st.form_submit_button("Khớp lệnh Hệ thống (Matching)"):
+            new_id = f"AL{len(st.session_state.orders)+1:03}"
+            st.session_state.orders.append({
+                "ID": new_id, "Nhà máy": factory_name, "Sản phẩm": product,
+                "Khối lượng": weight, "Giá trần": max_price, "Deadline": str(deadline),
+                "Trạng thái": "Đang tìm Đại lý", "Tổng tiền": weight * max_price
+            })
+            st.success(f"Đã phát lệnh {new_id}! AI đang quét Đại lý phù hợp trong bán kính 20km...")
 
-    st.subheader("Tạo đơn thu mua")
+    st.markdown("---")
+    st.header("Bước 5: Xác nhận mã QR & Quyết toán")
+    for order in st.session_state.orders:
+        if order["Trạng thái"] == "Đã đến Nhà máy":
+            st.warning(f"Đơn {order['ID']} ({order['Khối lượng']} tấn {order['Sản phẩm']}) đang chờ xác nhận.")
+            if st.button(f"Quét QR Nhận hàng {order['ID']}"):
+                order["Trạng thái"] = "Hoàn tất - Chờ Auto-split"
+                st.rerun()
 
-    factory = st.text_input("Tên nhà máy")
-    weight = st.number_input("Khối lượng (tấn)", min_value=1, value=10)
-
-    base_cost = weight * PRICE_PER_TON
-    platform_fee = base_cost * PLATFORM_FEE_RATE
-    total = base_cost + platform_fee
-
-    st.write("Tiền rơm:", f"{base_cost:,.0f} đ")
-    st.write("Phí sàn:", f"{platform_fee:,.0f} đ")
-    st.success(f"Tổng thanh toán: {total:,.0f} đ")
-
-    if st.button("Đăng đơn"):
-
-        new_order = {
-            "ID": f"AL{len(st.session_state.orders)+1}",
-            "Nhà máy": factory,
-            "Khối lượng": weight,
-            "Trạng thái": "Chờ xác nhận",
-            "Tổng tiền": total,
-            "Phí sàn": platform_fee,
-            "Lợi nhuận đại lý": weight * (PRICE_PER_TON - PRICE_BUY_PER_TON)
-        }
-
-        st.session_state.orders.append(new_order)
-        st.success("Đã tạo đơn!")
-
-# =================================================
-# ĐẠI LÝ
-# =================================================
-elif role == "Đại lý":
-
-    st.subheader("Đơn chờ xác nhận")
-
-    for i, order in enumerate(st.session_state.orders):
-
-        if order["Trạng thái"] == "Chờ xác nhận":
-
-            st.write(f"{order['ID']} - {order['Khối lượng']} tấn")
-
-            if st.button(f"Xác nhận {order['ID']}", key=f"confirm_{i}"):
-                st.session_state.orders[i]["Trạng thái"] = "Đang thu gom"
-                st.experimental_rerun()
-
-        elif order["Trạng thái"] == "Đang thu gom":
-
-            st.write(f"{order['ID']} - Đang thu gom")
-
-            if st.button(f"Hoàn tất {order['ID']}", key=f"finish_{i}"):
-                st.session_state.orders[i]["Trạng thái"] = "Chờ kiểm định"
-                st.experimental_rerun()
-
-# =================================================
-# HTX
-# =================================================
-elif role == "HTX vận tải":
-
-    st.subheader("Kiểm định")
-
-    for i, order in enumerate(st.session_state.orders):
-
-        if order["Trạng thái"] == "Chờ kiểm định":
-
-            st.write(f"{order['ID']} - {order['Khối lượng']} tấn")
-
-            moisture = st.slider(
-                f"Độ ẩm {order['ID']}",
-                10, 40, 20,
-                key=f"moist_{i}"
-            )
-
-            if st.button(f"Kiểm tra {order['ID']}", key=f"qc_{i}"):
-
-                if moisture <= 25:
-                    st.session_state.orders[i]["Trạng thái"] = "Đang vận chuyển"
-                else:
-                    st.session_state.orders[i]["Trạng thái"] = "Không đạt"
-
-                st.experimental_rerun()
-
-# =================================================
-# ADMIN
-# =================================================
-elif role == "Admin":
-
-    st.subheader("Tổng quan")
-
-    total_volume = 0
-    total_value = 0
-    total_platform = 0
-
-    for i, order in enumerate(st.session_state.orders):
-
-        if order["Trạng thái"] == "Đang vận chuyển":
-
-            if st.button(f"Xác nhận giao {order['ID']}", key=f"deliver_{i}"):
-                st.session_state.orders[i]["Trạng thái"] = "Hoàn tất"
-                st.experimental_rerun()
-
-        if order["Trạng thái"] == "Hoàn tất":
-            total_volume += order["Khối lượng"]
-            total_value += order["Tổng tiền"]
-            total_platform += order["Phí sàn"]
-
-    st.metric("Tổng sản lượng", total_volume)
-    st.metric("Tổng giao dịch", f"{total_value:,.0f} đ")
-    st.metric("Doanh thu nền tảng", f"{total_platform:,.0f} đ")
-
-# =================================================
-# LEDGER
-# =================================================
-st.markdown("---")
-st.subheader("Sổ cái")
-
-if st.session_state.orders:
-    df = pd.DataFrame(st.session_state.orders)
-    st.dataframe(df, use_container_width=True)
-else:
-    st.write("Chưa có đơn nào.")
+# =====================================================
+# VAI TRÒ 2: ĐẠI LÝ / HUB (BƯỚC 2 & BƯỚC 4)
+# =====================================================
+elif "Đại lý" in role:
+    st.header("Chợ Đơn hàng (Đã lọc theo Rating & Khoảng cách)")
+    for order in st.session_state.orders:
+        if order["Trạng thái"] == "Đang tìm Đại lý":
+            with st.expander(f"🔥 {order['ID']} - Từ: {order['Nhà máy']}", expanded=True
