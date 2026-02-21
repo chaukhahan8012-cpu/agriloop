@@ -79,16 +79,13 @@ if not st.session_state.is_logged_in:
             username = st.text_input("Tên đăng nhập (Demo: nhập bất kỳ)")
             password = st.text_input("Mật khẩu", type="password")
             
+            # TÁCH RÕ 2 LUỒNG TÀI XẾ Ở ĐÂY
             role_select = st.selectbox("Chọn vai trò của bạn:", 
-                ["🏭 Nhà máy", "🏪 Đại lý (Hub)", "🌾 Nông dân", "🚛 Tài xế", "👑 Admin"]
+                ["🏭 Nhà máy", "🏪 Đại lý (Hub)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)", "👑 Admin"]
             )
             
-            driver_type = ""
             agent_loc = ""
-            
-            if role_select == "🚛 Tài xế":
-                driver_type = st.radio("Bạn chạy tuyến nào?", ["🚜 Chặng ngắn (Xe ba gác/Máy cày)", "🚛 Chặng dài (Xe tải lớn/Container)"])
-            elif role_select == "🏪 Đại lý (Hub)":
+            if role_select == "🏪 Đại lý (Hub)":
                 agent_loc = st.text_input("📍 Nhập địa chỉ Hub của bạn (Huyện, Tỉnh):", placeholder="VD: Vĩnh Châu, Sóc Trăng...")
             
             submit_login = st.form_submit_button("Đăng nhập vào Hệ thống")
@@ -101,12 +98,9 @@ if not st.session_state.is_logged_in:
                 else:
                     st.session_state.is_logged_in = True
                     st.session_state.username = username
-                    if role_select == "🚛 Tài xế":
-                        st.session_state.current_role = driver_type
-                    else:
-                        st.session_state.current_role = role_select
-                        if role_select == "🏪 Đại lý (Hub)":
-                            st.session_state.agent_address = agent_loc
+                    st.session_state.current_role = role_select
+                    if role_select == "🏪 Đại lý (Hub)":
+                        st.session_state.agent_address = agent_loc
                     st.rerun()
 
 # =====================================================
@@ -114,7 +108,7 @@ if not st.session_state.is_logged_in:
 # =====================================================
 else:
     role = st.session_state.current_role
-    cfg = st.session_state.system_config # Rút gọn biến config
+    cfg = st.session_state.system_config
     
     st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2664/2664552.png", width=80)
     st.sidebar.title("AgriLoop MVP")
@@ -144,7 +138,6 @@ else:
             weight = col4.number_input("Khối lượng cần mua (Tấn)", min_value=1.0, value=50.0, step=0.5, format="%.1f")
             deadline = col5.date_input("Hạn chót nhận hàng")
             
-            # Tính toán DỰ KIẾN theo Config
             base_price = cfg["price_rom_cuon"] if product == "Rơm cuộn" else cfg["price_rom_roi"]
             base_cost = weight * base_price
             shipping_est = weight * (cfg["shipping_short_per_ton"] + cfg["shipping_long_per_ton"])
@@ -196,7 +189,6 @@ else:
                     with st.expander(f"📍 Lộ trình & Quyết toán thực tế đơn {order['ID']}", expanded=True):
                         st.warning(f"🚛 Đơn hàng {order['Khối lượng']} Tấn đang trên đường đến {order['Địa chỉ']}!")
                         
-                        # TÍNH TOÁN QUYẾT TOÁN THỰC TẾ (TẦNG 2)
                         actual_shipping = order['Chi_Phi_Chặng_Ngắn'] + order['Chi_Phi_Chặng_Dài']
                         actual_subtotal = order['Chi_Phi_Rơm'] + actual_shipping
                         actual_platform_fee = actual_subtotal * cfg["platform_fee_rate"]
@@ -336,7 +328,7 @@ else:
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG NGẮN
     # =====================================================
-    elif role == "🚜 Chặng ngắn (Xe ba gác/Máy cày)":
+    elif role == "🚜 Tài xế (Chặng ngắn)":
         st.subheader("Trạm Nhận Cuốc (Zalo Mini App)")
         is_active = st.toggle("🟢 Bật nhận cuốc (Online)", value=True)
         if is_active:
@@ -351,7 +343,7 @@ else:
                     if st.button(f"🏁 Đã hạ tải tại Hub ({trip['ID']})"):
                         trip["Trạng thái"] = "Đã nhập kho"
                         
-                        # LOGIC LƯU CHI PHÍ THỰC TẾ CHẶNG NGẮN VÀO ORDER
+                        # CHỐT CHI PHÍ THỰC TẾ CHẶNG NGẮN
                         for o in st.session_state.orders:
                             if o["ID"] == trip["Order_ID"]:
                                 o["Đã_Gom"] += trip["Khối lượng"]
@@ -363,7 +355,7 @@ else:
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG DÀI
     # =====================================================
-    elif role == "🚛 Chặng dài (Xe tải lớn/Container)":
+    elif role == "🚛 Tài xế (Chặng dài)":
         st.subheader("Sàn Vận Tải Chặng Dài (Middle-Mile)")
         truck_profile = st.selectbox("Hồ sơ xe của bạn:", ["🥇 Xe tải rỗng chiều về (Giảm 20% cước)", "🥈 Xe đối tác 3PL (Giá chuẩn)", "🥉 Xe cá nhân tự do (Phụ thu 10% mùa cao điểm)"])
         
@@ -373,9 +365,9 @@ else:
                 st.write(f"📦 **Đơn hàng {order['ID']}** - {order['Khối lượng']} Tấn về {order['Nhà máy']}")
                 if st.button(f"🚛 Nhận chuyến giao hàng ({order['ID']})"):
                     order["Trạng thái"] = "Đang giao đến Nhà máy"
-                    order["Loại_Xe"] = truck_profile.split(" ")[1] # Lấy tên loại xe
+                    order["Loại_Xe"] = truck_profile.split(" ")[1]
                     
-                    # LOGIC LƯU CHI PHÍ THỰC TẾ CHẶNG DÀI DỰA VÀO LOẠI XE
+                    # CHỐT CHI PHÍ THỰC TẾ CHẶNG DÀI
                     multiplier = 0.8 if "rỗng" in truck_profile else (1.0 if "3PL" in truck_profile else 1.1)
                     actual_long_cost = order["Khối lượng"] * cfg["shipping_long_per_ton"] * multiplier
                     order["Chi_Phi_Chặng_Dài"] = actual_long_cost
@@ -391,7 +383,6 @@ else:
         
         tab1, tab2, tab3 = st.tabs(["📊 Tổng quan Dashboard", "⚙️ Cấu hình Hệ thống", "🛠️ Quản lý Đơn hàng (Control Panel)"])
         
-        # TAB 1: DASHBOARD
         with tab1:
             completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
             total_revenue = sum(o.get("Tổng_Thực_Tế", 0) for o in completed_orders)
@@ -404,7 +395,6 @@ else:
             col3.metric("Tổng Phí Vận Chuyển", f"{total_shipping / 1000000:,.1f} Tr")
             col4.metric("Số Đơn Hoàn Tất", len(completed_orders))
             
-            # Phân tích theo Hub
             st.subheader("Doanh thu theo Hub Đại lý")
             if completed_orders:
                 df_hub = pd.DataFrame(completed_orders)
@@ -414,7 +404,6 @@ else:
             else:
                 st.info("Chưa đủ dữ liệu để vẽ biểu đồ.")
 
-        # TAB 2: SYSTEM CONFIG (BỘ CÔNG THƯƠNG)
         with tab2:
             st.subheader("⚙️ Cấu hình Bộ máy định giá AgriLoop")
             st.info("Lưu ý: Thay đổi cấu hình tại đây sẽ áp dụng lập tức cho các đơn hàng mới tạo.")
@@ -426,9 +415,8 @@ else:
             with col_b:
                 cfg["shipping_short_per_ton"] = st.number_input("Đơn giá chặng ngắn (VNĐ/Tấn)", value=cfg["shipping_short_per_ton"], step=10000)
                 cfg["shipping_long_per_ton"] = st.number_input("Đơn giá chặng dài tiêu chuẩn (VNĐ/Tấn)", value=cfg["shipping_long_per_ton"], step=10000)
-                cfg["platform_fee_rate"] = st.slider("Phí nền tảng (Tỷ lệ %)", 0.01, 0.15, cfg["platform_fee_rate"], step=0.01)
+                cfg["platform_fee_rate"] = st.slider("Phí nền tảng (Tỷ lệ %)", 0.01, 0.15, float(cfg["platform_fee_rate"]), step=0.01)
 
-        # TAB 3: ADMIN CONTROL PANEL
         with tab3:
             st.subheader("🛠️ Can thiệp hệ thống (Emergency Panel)")
             if not st.session_state.orders:
