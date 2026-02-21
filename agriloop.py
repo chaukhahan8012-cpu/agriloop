@@ -13,6 +13,7 @@ st.markdown("""
     .invoice-box { background-color: #f1f8e9; padding: 20px; border-radius: 10px; border: 1px solid #c5e1a5; margin-bottom: 20px; }
     .farmer-card { border-left: 4px solid #ff9800; padding: 15px; background: #fff8e1; margin-bottom: 10px; border-radius: 5px;}
     .transport-box { border: 2px dashed #1976d2; padding: 15px; background-color: #e3f2fd; border-radius: 8px; margin-top: 15px;}
+    .driver-card { border-left: 4px solid #00b14f; padding: 15px; background: #e8f5e9; margin-bottom: 10px; border-radius: 5px;}
     .metric-card { background-color: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
     </style>
 """, unsafe_allow_html=True)
@@ -25,7 +26,7 @@ SHIPPING_RATE_PER_TON = 200000
 PLATFORM_FEE_RATE = 0.05       
 
 # ==========================
-# KHỞI TẠO MOCK DATA (MỒI SẴN ĐỂ ADMIN CÓ SỐ LIỆU DEMO)
+# KHỞI TẠO MOCK DATA
 # ==========================
 if "orders" not in st.session_state:
     st.session_state.orders = [
@@ -48,6 +49,7 @@ role = st.sidebar.radio(
         "🏭 Nhà máy", 
         "🏪 Đại lý (Hub & Điều phối)", 
         "🌾 Nông dân (Zalo Mini App)",
+        "🚛 Tài xế (Chặng ngắn & Dài)",
         "👑 Admin (Tổng quan & Phân tích)"
     ]
 )
@@ -59,7 +61,6 @@ st.title(f"{role}")
 # =====================================================
 if role == "🏭 Nhà máy":
     st.header("1. Tạo Lệnh Thu Mua")
-    
     with st.form("factory_order"):
         col1, col2 = st.columns(2)
         factory_name = col1.text_input("Tên Nhà máy", "NM Điện Sinh Khối Hậu Giang")
@@ -67,10 +68,7 @@ if role == "🏭 Nhà máy":
         
         col3, col4, col5 = st.columns(3)
         product = col3.selectbox("Loại phụ phẩm", ["Rơm cuộn", "Rơm rời"])
-        
-        # ĐÃ SỬA CHỖ NÀY: Cho phép Nhà máy gõ số thập phân tự do (vd: 50.5 tấn)
         weight = col4.number_input("Khối lượng cần mua (Tấn)", min_value=1.0, value=50.0, step=0.5, format="%.1f")
-        
         deadline = col5.date_input("Hạn chót nhận hàng")
         
         base_cost = weight * PRICES[product]
@@ -103,7 +101,6 @@ if role == "🏭 Nhà máy":
             st.success("Đã tạo đơn. Vui lòng thanh toán cọc bên dưới!")
             st.rerun()
 
-    # Nhận hàng & Thanh toán
     pending_delivery = [o for o in st.session_state.orders if o["Trạng thái"] in ["Chờ quét QR Cọc", "Đang giao đến Nhà máy"]]
     if pending_delivery:
         st.header("2. Xử lý Đơn hàng hiện tại")
@@ -125,15 +122,6 @@ if role == "🏭 Nhà máy":
                     st.success("Giao dịch hoàn tất!")
                     st.rerun()
 
-    # Lịch sử Nhà máy
-    st.markdown("---")
-    st.subheader("📜 Lịch sử mua hàng của bạn")
-    factory_history = [o for o in st.session_state.orders if o["Trạng thái"] == "Hoàn tất"]
-    if factory_history:
-        st.dataframe(pd.DataFrame(factory_history)[["ID", "Sản phẩm", "Khối lượng", "Tổng tiền", "Trạng thái"]], use_container_width=True)
-    else:
-        st.info("Chưa có giao dịch nào hoàn tất.")
-
 # =====================================================
 # VAI TRÒ 2: ĐẠI LÝ (HUB & ĐIỀU PHỐI)
 # =====================================================
@@ -153,52 +141,59 @@ elif role == "🏪 Đại lý (Hub & Điều phối)":
 
     st.markdown("---")
     st.header("Trung Tâm Thu Gom & Điều Phối Vận Tải")
-    active_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Đại lý đang gom"]
+    active_orders = [o for o in st.session_state.orders if o["Trạng thái"] in ["Đại lý đang gom", "Chờ xe chặng dài"]]
     
     for order in active_orders:
         st.subheader(f"📦 Đơn {order['ID']} - {order['Nhà máy']}")
         progress_pct = min(order['Đã gom'] / order['Khối lượng'], 1.0)
         st.progress(progress_pct, text=f"Đã gom {order['Đã gom']}/{order['Khối lượng']} Tấn")
         
-        if st.button(f"📢 Phát tín hiệu tìm rơm qua Zalo cho Nông dân ({order['ID']})"):
-            order["Broadcast_Zalo"] = True
-            st.toast("Đã gửi tin nhắn Zalo hàng loạt!")
+        if order["Trạng thái"] == "Đại lý đang gom":
+            if st.button(f"📢 Phát tín hiệu tìm rơm qua Zalo cho Nông dân ({order['ID']})"):
+                order["Broadcast_Zalo"] = True
+                st.toast("Đã gửi tin nhắn Zalo hàng loạt!")
+                
+            offers = [f for f in st.session_state.farmer_offers if f["Order_ID"] == order["ID"]]
+            if offers:
+                for offer in offers:
+                    if offer["Trạng thái"] == "Chờ xử lý":
+                        with st.container(border=True):
+                            st.write(f"🧑‍🌾 **{offer['Tên']}** - Cung cấp: **{offer['Khối lượng']} Tấn**")
+                            if offer['Phương thức'] == "Đại lý lại gom":
+                                if st.button(f"📡 Phát lệnh tìm Tài xế chặng ngắn đi gom ({offer['ID']})"):
+                                    offer["Trạng thái"] = "Chờ Tài xế chặng ngắn"
+                                    st.toast("Đã đẩy cuốc xe lên App Tài xế Zalo!")
+                                    st.rerun()
+                            else:
+                                if st.button(f"👉 Xác nhận Nông dân đã tự chở tới Hub ({offer['ID']})"):
+                                    offer["Trạng thái"] = "Đã nhập kho"
+                                    order["Đã gom"] += offer["Khối lượng"]
+                                    st.rerun()
+                    elif offer["Trạng thái"] == "Chờ Tài xế chặng ngắn":
+                        st.info(f"⏳ Đang chờ tài xế nhận cuốc lấy hàng của {offer['Tên']}...")
+                    elif offer["Trạng thái"] == "Tài xế đang đi gom":
+                        st.warning(f"🚜 Tài xế đang trên đường chở {offer['Khối lượng']} tấn của {offer['Tên']} về Hub.")
             
-        offers = [f for f in st.session_state.farmer_offers if f["Order_ID"] == order["ID"]]
-        if offers:
-            for offer in offers:
-                if offer["Trạng thái"] == "Chờ xử lý":
-                    with st.container(border=True):
-                        st.write(f"🧑‍🌾 **{offer['Tên']}** - Cung cấp: **{offer['Khối lượng']} Tấn**")
-                        if offer['Phương thức'] == "Đại lý lại gom":
-                            if st.button(f"👉 Đặt xe Ba Gác đi gom ngay ({offer['ID']})"):
-                                offer["Trạng thái"] = "Đã nhập kho"
-                                order["Đã gom"] += offer["Khối lượng"]
-                                st.rerun()
-                        else:
-                            if st.button(f"👉 Xác nhận Nông dân đã tự chở tới ({offer['ID']})"):
-                                offer["Trạng thái"] = "Đã nhập kho"
-                                order["Đã gom"] += offer["Khối lượng"]
-                                st.rerun()
-        
-        if order['Đã gom'] >= order['Khối lượng']:
-            st.markdown(f"""
-            <div class="transport-box">
-                <h4 style="color: #1976d2;">🚛 Kho đã đầy - Điều phối Vận tải Chặng Dài</h4>
-            </div>
-            """, unsafe_allow_html=True)
-            truck_type = st.radio("Chọn xe chặng dài:", ["🥇 Xe tải rỗng chiều về", "🥈 Xe đối tác 3PL"], key=f"truck_{order['ID']}")
-            if st.button(f"🚀 Bắt đầu giao hàng đến Nhà máy ({order['ID']})"):
-                order["Trạng thái"] = "Đang giao đến Nhà máy"
-                st.success("Đã book xe thành công! Hàng đang trên đường đi.")
-                st.rerun()
+            # Khi gom đủ hàng, kích hoạt chặng dài
+            if order['Đã gom'] >= order['Khối lượng']:
+                st.markdown(f"""
+                <div class="transport-box">
+                    <h4 style="color: #1976d2;">✅ Kho đã đầy - Sẵn sàng giao cho Nhà máy</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"🚀 Đăng tìm xe tải Chặng Dài ({order['ID']})"):
+                    order["Trạng thái"] = "Chờ xe chặng dài"
+                    st.success("Đã đăng tải yêu cầu lên Sàn Vận Tải AgriLoop!")
+                    st.rerun()
+                    
+        elif order["Trạng thái"] == "Chờ xe chặng dài":
+            st.info("⏳ Đang đợi xe tải lớn nhận chuyến trên hệ thống...")
 
 # =====================================================
 # VAI TRÒ 3: NÔNG DÂN (ZALO MINI APP)
 # =====================================================
 elif role == "🌾 Nông dân (Zalo Mini App)":
     st.header("Tin Nhắn Thu Mua Từ Đại Lý")
-    
     broadcasted_orders = [o for o in st.session_state.orders if o.get("Broadcast_Zalo") == True and o["Trạng thái"] == "Đại lý đang gom"]
     
     if not broadcasted_orders:
@@ -214,9 +209,7 @@ elif role == "🌾 Nông dân (Zalo Mini App)":
         with st.form(f"form_farmer_{order['ID']}"):
             f_name = st.text_input("Tên của bạn", "Chú Ba Thắng")
             f_address = st.text_input("Địa chỉ ruộng", "Xã Vĩnh Bình, Hòa Bình")
-            
             f_weight = st.number_input("Nhập số lượng rơm bạn có (Tấn):", min_value=0.1, value=5.0, step=0.5, format="%.1f")
-            
             f_method = st.radio("Phương thức giao nhận:", ["Đại lý lại gom", "Tự đem lại Hub"])
             
             if st.form_submit_button("Xác nhận Bán"):
@@ -228,7 +221,72 @@ elif role == "🌾 Nông dân (Zalo Mini App)":
                 st.success("Đã gửi thông tin cho Đại lý thành công!")
 
 # =====================================================
-# VAI TRÒ 4: ADMIN (TỔNG QUAN & PHÂN TÍCH)
+# VAI TRÒ 4: TÀI XẾ (CHẶNG NGẮN & CHẶNG DÀI)
+# =====================================================
+elif role == "🚛 Tài xế (Chặng ngắn & Dài)":
+    st.header("Ứng Dụng Tài Xế AgriLoop")
+    
+    driver_type = st.radio("Chọn không gian làm việc:", ["🚜 Chặng ngắn (Xe ba gác/Máy cày địa phương)", "🚛 Chặng dài (Xe tải lớn/Container)"])
+    
+    if "Chặng ngắn" in driver_type:
+        st.subheader("Trạm Nhận Cuốc (Zalo Mini App)")
+        is_active = st.toggle("🟢 Bật nhận cuốc (Online)", value=True)
+        
+        if is_active:
+            # Lọc các cuốc xe chặng ngắn (Đại lý đã phát lệnh)
+            short_haul_trips = [f for f in st.session_state.farmer_offers if f["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]]
+            
+            if not short_haul_trips:
+                st.info("Hiện chưa có cuốc thu gom nào quanh khu vực của bạn.")
+                
+            for trip in short_haul_trips:
+                st.markdown(f"""
+                <div class="driver-card">
+                    <h4>📍 Cuốc xe: Gom {trip['Khối lượng']} Tấn Rơm</h4>
+                    <p><b>Nhận tại:</b> Ruộng {trip['Tên']} ({trip['Địa chỉ']})</p>
+                    <p><b>Giao đến:</b> Hub Đại lý gần nhất</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if trip["Trạng thái"] == "Chờ Tài xế chặng ngắn":
+                    if st.button(f"✅ Nhận cuốc này ({trip['ID']})"):
+                        trip["Trạng thái"] = "Tài xế đang đi gom"
+                        st.toast("Nhận cuốc thành công! Chạy tới ruộng nông dân ngay nhé.")
+                        st.rerun()
+                elif trip["Trạng thái"] == "Tài xế đang đi gom":
+                    if st.button(f"🏁 Xác nhận đã hạ tải tại Hub Đại lý ({trip['ID']})"):
+                        trip["Trạng thái"] = "Đã nhập kho"
+                        # Cập nhật số lượng cho Order tổng của Đại lý
+                        for o in st.session_state.orders:
+                            if o["ID"] == trip["Order_ID"]:
+                                o["Đã gom"] += trip["Khối lượng"]
+                        st.success("Tuyệt vời! Thu nhập đã được cộng vào ví của bạn.")
+                        st.rerun()
+        else:
+            st.warning("🔴 Bạn đang ở trạng thái Tạm nghỉ. Bật Online để nhận thông báo cuốc xe.")
+            
+    else:
+        st.subheader("Sàn Vận Tải Chặng Dài (Middle-Mile)")
+        truck_profile = st.selectbox("Hồ sơ xe của bạn:", ["🥇 Xe tải rỗng chiều về (Ưu tiên khớp lệnh)", "🥈 Xe đối tác 3PL (Hợp đồng)", "🥉 Xe cá nhân tự do"])
+        
+        long_haul_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ xe chặng dài"]
+        
+        if not long_haul_orders:
+            st.info("Hiện không có đơn hàng nào cần xe tải lớn.")
+            
+        for order in long_haul_orders:
+            with st.container(border=True):
+                st.write(f"📦 **Đơn hàng {order['ID']}** - {order['Khối lượng']} Tấn {order['Sản phẩm']}")
+                st.write(f"📍 **Lộ trình:** Hub Đại lý ➡️ {order['Nhà máy']} ({order['Địa chỉ']})")
+                
+                if st.button(f"🚛 Nhận chuyến giao hàng ({order['ID']})"):
+                    order["Trạng thái"] = "Đang giao đến Nhà máy"
+                    order["Loại_Xe"] = truck_profile # Lưu lại lịch sử loại xe đã book
+                    st.success("Đã nhận chuyến! Mời bác tài đánh xe đến Hub lấy hàng.")
+                    st.rerun()
+
+# =====================================================
+# VAI TRÒ 5: ADMIN (TỔNG QUAN & PHÂN TÍCH)
 # =====================================================
 elif role == "👑 Admin (Tổng quan & Phân tích)":
     st.header("Trạm Điều Hành Trung Tâm AgriLoop")
@@ -269,10 +327,8 @@ elif role == "👑 Admin (Tổng quan & Phân tích)":
     st.subheader("📜 Sổ Cái Lịch Sử Giao Dịch (Ledger Toàn Hệ Thống)")
     if st.session_state.orders:
         df_all = pd.DataFrame(st.session_state.orders)
-        
-        desired_cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng tiền", "Phí sàn", "Đã gom"]
+        desired_cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng tiền", "Phí sàn", "Đã gom", "Loại_Xe"]
         existing_cols = [col for col in desired_cols if col in df_all.columns]
-        
         st.dataframe(df_all[existing_cols], use_container_width=True)
     else:
         st.write("Hệ thống chưa có giao dịch.")
