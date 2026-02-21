@@ -328,53 +328,63 @@ else:
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG NGẮN
     # =====================================================
-    elif role == "🚜 Tài xế (Chặng ngắn)":
+    elif role == "🚜 Chặng ngắn (Xe ba gác/Máy cày)":
         st.subheader("Trạm Nhận Cuốc (Zalo Mini App)")
         is_active = st.toggle("🟢 Bật nhận cuốc (Online)", value=True)
+        
         if is_active:
             short_haul_trips = [f for f in st.session_state.farmer_offers if f["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]]
+            
+            if not short_haul_trips:
+                st.info("Hiện chưa có cuốc thu gom nào quanh khu vực của bạn.")
+                
             for trip in short_haul_trips:
-                st.markdown(f"<div class='driver-card'><h4>📍 Gom {trip['Khối lượng']} Tấn Rơm tại {trip['Tên']}</h4></div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="driver-card">
+                    <h4>📍 Cuốc xe: Gom {trip['Khối lượng']} Tấn Rơm</h4>
+                    <p><b>Nhận tại:</b> Ruộng {trip['Tên']} ({trip['Địa chỉ']})</p>
+                    <p><b>Giao đến:</b> Hub Đại lý gần nhất</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
                 if trip["Trạng thái"] == "Chờ Tài xế chặng ngắn":
-                    if st.button(f"✅ Nhận cuốc ({trip['ID']})"):
+                    if st.button(f"✅ Nhận cuốc này ({trip['ID']})"):
                         trip["Trạng thái"] = "Tài xế đang đi gom"
+                        st.toast("Nhận cuốc thành công! Chạy tới ruộng nông dân ngay nhé.")
                         st.rerun()
                 elif trip["Trạng thái"] == "Tài xế đang đi gom":
-                    if st.button(f"🏁 Đã hạ tải tại Hub ({trip['ID']})"):
+                    if st.button(f"🏁 Xác nhận đã hạ tải tại Hub ({trip['ID']})"):
                         trip["Trạng thái"] = "Đã nhập kho"
-                        
-                        # CHỐT CHI PHÍ THỰC TẾ CHẶNG NGẮN
                         for o in st.session_state.orders:
                             if o["ID"] == trip["Order_ID"]:
-                                o["Đã_Gom"] += trip["Khối lượng"]
-                                actual_short_cost = trip["Khối lượng"] * cfg["shipping_short_per_ton"]
-                                o["Chi_Phi_Chặng_Ngắn"] += actual_short_cost
-                        st.success("Hoàn thành chuyến đi!")
+                                o["Đã gom"] += trip["Khối lượng"]
+                        st.success("Tuyệt vời! Thu nhập đã được cộng vào ví của bạn.")
                         st.rerun()
+        else:
+            st.warning("🔴 Bạn đang ở trạng thái Tạm nghỉ. Bật Online để nhận thông báo cuốc xe.")
 
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG DÀI
     # =====================================================
-    elif role == "🚛 Tài xế (Chặng dài)":
+    elif role == "🚛 Chặng dài (Xe tải lớn/Container)":
         st.subheader("Sàn Vận Tải Chặng Dài (Middle-Mile)")
-        truck_profile = st.selectbox("Hồ sơ xe của bạn:", ["🥇 Xe tải rỗng chiều về (Giảm 20% cước)", "🥈 Xe đối tác 3PL (Giá chuẩn)", "🥉 Xe cá nhân tự do (Phụ thu 10% mùa cao điểm)"])
+        truck_profile = st.selectbox("Hồ sơ xe của bạn:", ["🥇 Xe tải rỗng chiều về", "🥈 Xe đối tác 3PL (Hợp đồng)", "🥉 Xe cá nhân tự do"])
         
         long_haul_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ xe chặng dài"]
+        
+        if not long_haul_orders:
+            st.info("Hiện không có đơn hàng nào cần xe tải lớn.")
+            
         for order in long_haul_orders:
             with st.container(border=True):
-                st.write(f"📦 **Đơn hàng {order['ID']}** - {order['Khối lượng']} Tấn về {order['Nhà máy']}")
+                st.write(f"📦 **Đơn hàng {order['ID']}** - {order['Khối lượng']} Tấn {order['Sản phẩm']}")
+                st.write(f"📍 **Lộ trình:** Hub Đại lý ➡️ {order['Nhà máy']} ({order['Địa chỉ']})")
+                
                 if st.button(f"🚛 Nhận chuyến giao hàng ({order['ID']})"):
                     order["Trạng thái"] = "Đang giao đến Nhà máy"
-                    order["Loại_Xe"] = truck_profile.split(" ")[1]
-                    
-                    # CHỐT CHI PHÍ THỰC TẾ CHẶNG DÀI
-                    multiplier = 0.8 if "rỗng" in truck_profile else (1.0 if "3PL" in truck_profile else 1.1)
-                    actual_long_cost = order["Khối lượng"] * cfg["shipping_long_per_ton"] * multiplier
-                    order["Chi_Phi_Chặng_Dài"] = actual_long_cost
-                    
-                    st.success("Đã nhận chuyến!")
+                    order["Loại_Xe"] = truck_profile 
+                    st.success("Đã nhận chuyến! Mời bác tài đánh xe đến Hub lấy hàng.")
                     st.rerun()
-
     # =====================================================
     # VAI TRÒ: ADMIN
     # =====================================================
@@ -436,3 +446,4 @@ else:
                         order["Trạng thái"] = "Sẵn sàng cho Đại lý"
                         st.toast(f"Đã reset đơn {order['ID']}!")
                         st.rerun()
+
