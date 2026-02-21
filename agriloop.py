@@ -157,11 +157,10 @@ else:
                         "Sản phẩm": product, "Khối lượng": weight, "Deadline": str(deadline),
                         "Trạng thái": "Chờ quét QR Cọc", "Tổng_Dự_Kiến": total_est, "Tiền_Cọc": deposit_amount,
                         "Chi_Phi_Rơm": base_cost, "Chi_Phi_Chặng_Ngắn": 0.0, "Chi_Phi_Chặng_Dài": 0.0,
-                        "Đã_Gom": 0.0, "Hub_Location": "Chưa có", "Tọa_Độ_Hub": [0,0]
+                        "Đã_Gom": 0.0, "Hub_Location": "Chưa có"
                     })
                     st.success("Đã tạo đơn thành công! Vui lòng quét mã QR bên dưới để thanh toán cọc.")
             
-            # SHOW MÃ QR NGAY BÊN DƯỚI FORM TẠO ĐƠN
             pending_deposits = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ quét QR Cọc"]
             if pending_deposits:
                 st.markdown("---")
@@ -181,7 +180,7 @@ else:
 
         with tab_track:
             st.header("Trạng Thái Đơn Hàng Liên Tục")
-            active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Cọc"]]
+            active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Cọc", "Đã hủy bởi Admin"]]
             
             if not active_factory_orders:
                 st.info("Hiện không có đơn hàng nào đang trong quá trình vận chuyển/thu gom.")
@@ -268,6 +267,7 @@ else:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+
     # =====================================================
     # VAI TRÒ: ĐẠI LÝ
     # =====================================================
@@ -383,23 +383,61 @@ else:
                     st.rerun()
 
     # =====================================================
-    # VAI TRÒ: ADMIN
+    # VAI TRÒ: ADMIN - BỘ CÔNG THƯƠNG & BÁO CÁO TỔNG TÀI
     # =====================================================
     elif role == "👑 Admin":
         st.header("Trạm Điều Hành Trung Tâm AgriLoop")
-        tab1, tab2, tab3 = st.tabs(["📊 Dashboard & Escrow", "⚙️ Cấu hình Hệ thống", "🛠️ Quản lý Đơn hàng"])
+        tab1, tab2, tab3 = st.tabs(["📊 Tổng quan & Báo cáo ESG", "⚙️ Cấu hình Hệ thống", "🛠️ Sổ cái & Quản lý"])
         
         with tab1:
+            # 1. Các chỉ số Tài chính cốt lõi
             completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
             total_revenue = sum(o.get("Tổng_Thực_Tế", 0) for o in completed_orders)
             total_platform_fee = sum(o.get("Phí_Sàn_Thực_Tế", 0) for o in completed_orders)
             total_risk_fund = sum(o.get("Quỹ_Rủi_Ro", 0) for o in completed_orders)
             
+            # Tính chỉ số Môi trường (ESG) - 1 Tấn rơm không đốt = giảm ~1.4 tấn CO2
+            total_volume = sum(o.get("Khối lượng", 0) for o in completed_orders)
+            co2_saved = total_volume * 1.4 
+            
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Doanh thu GMV", f"{total_revenue / 1000000:,.1f} Tr")
-            col2.metric("Doanh thu Sàn", f"{total_platform_fee / 1000000:,.1f} Tr")
-            col3.metric("🏦 Quỹ Rủi Ro", f"{total_risk_fund / 1000:,.0f} K")
-            col4.metric("Số Đơn Hoàn Tất", len(completed_orders))
+            col2.metric("Lợi nhuận Sàn", f"{total_platform_fee / 1000000:,.1f} Tr", "+12%")
+            col3.metric("🏦 Quỹ Rủi Ro Escrow", f"{total_risk_fund / 1000:,.0f} K")
+            col4.metric("🌱 C02 Giảm thiểu", f"{co2_saved:,.1f} Tấn", "Tiêu chuẩn ESG")
+
+            st.markdown("---")
+            col_chart1, col_chart2 = st.columns(2)
+            
+            # 2. Biểu đồ phễu trạng thái đơn hàng
+            with col_chart1:
+                st.subheader("Trạng thái các Đơn hàng")
+                if st.session_state.orders:
+                    df_all = pd.DataFrame(st.session_state.orders)
+                    status_counts = df_all['Trạng thái'].value_counts()
+                    st.bar_chart(status_counts, color="#ff9800")
+                else:
+                    st.info("Chưa có dữ liệu.")
+            
+            # 3. Biểu đồ tỷ trọng Sản phẩm
+            with col_chart2:
+                st.subheader("Sản lượng theo Phụ phẩm")
+                if completed_orders:
+                    df_chart = pd.DataFrame(completed_orders)
+                    product_data = df_chart.groupby("Sản phẩm")["Khối lượng"].sum()
+                    st.bar_chart(product_data, color="#2e7d32")
+                else:
+                    st.info("Chưa có giao dịch hoàn tất.")
+                    
+            st.markdown("---")
+            # 4. Bản đồ Mạng lưới Logistics ĐBSCL
+            st.subheader("📍 Bản đồ Mạng lưới Hub AgriLoop")
+            st.caption("Mô phỏng vị trí các Hub Đại lý đang hoạt động tại Đồng bằng sông Cửu Long")
+            map_hubs = pd.DataFrame({
+                'lat': [9.6000, 9.2941, 10.0451, 9.7803], # Sóc Trăng, Bạc Liêu, Cần Thơ, Hậu Giang
+                'lon': [105.9750, 105.7278, 105.7468, 105.4746]
+            })
+            st.map(map_hubs, zoom=7)
 
         with tab2:
             st.subheader("⚙️ Cấu hình Bộ máy định giá & Quản trị rủi ro")
@@ -414,16 +452,25 @@ else:
                 cfg["risk_fund_rate"] = st.slider("Quỹ rủi ro - Escrow (%)", 0.0, 0.05, float(cfg["risk_fund_rate"]), 0.005)
 
         with tab3:
-            st.subheader("🛠️ Can thiệp hệ thống & Điểm Tín Dụng")
-            for order in st.session_state.orders:
-                with st.expander(f"Mã Lệnh: {order['ID']} | Trạng thái: {order['Trạng thái']}"):
-                    col_btn1, col_btn2 = st.columns(2)
-                    if col_btn1.button("❌ Hủy bỏ đơn hàng này", key=f"cancel_{order['ID']}"):
-                        order["Trạng thái"] = "Đã hủy bởi Admin"
-                        st.session_state.agent_points -= 50 # Trừ điểm nặng khi hủy
-                        st.rerun()
-                    if col_btn2.button("🔁 Reset trạng thái về 'Sẵn sàng'", key=f"reset_{order['ID']}"):
-                        order["Trạng thái"] = "Sẵn sàng cho Đại lý"
-                        st.session_state.agent_points -= 20
-                        st.rerun()
-
+            st.subheader("📜 Sổ Cái (Ledger) & Control Panel")
+            if not st.session_state.orders:
+                st.write("Chưa có đơn hàng nào trên hệ thống.")
+            else:
+                # Bảng dữ liệu Sổ cái
+                df_ledger = pd.DataFrame(st.session_state.orders)
+                cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái"]
+                existing_cols = [c for c in cols if c in df_ledger.columns]
+                st.dataframe(df_ledger[existing_cols], use_container_width=True)
+                
+                st.markdown("### ⚠️ Can thiệp Khẩn cấp")
+                for order in st.session_state.orders:
+                    with st.expander(f"Mã Lệnh: {order['ID']} | Trạng thái: {order['Trạng thái']}"):
+                        col_btn1, col_btn2 = st.columns(2)
+                        if col_btn1.button("❌ Hủy bỏ đơn hàng này", key=f"cancel_{order['ID']}"):
+                            order["Trạng thái"] = "Đã hủy bởi Admin"
+                            st.session_state.agent_points -= 50 # Phạt nặng
+                            st.rerun()
+                        if col_btn2.button("🔁 Reset trạng thái về 'Sẵn sàng'", key=f"reset_{order['ID']}"):
+                            order["Trạng thái"] = "Sẵn sàng cho Đại lý"
+                            st.session_state.agent_points -= 20 # Phạt nhẹ
+                            st.rerun()
