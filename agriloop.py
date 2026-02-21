@@ -90,4 +90,146 @@ elif "Đại lý" in role:
     st.header("Chợ Đơn hàng (Đã lọc theo Rating & Khoảng cách)")
     for order in st.session_state.orders:
         if order["Trạng thái"] == "Đang tìm Đại lý":
-            with st.expander(f"🔥 {order['ID']} - Từ: {order['Nhà máy']}", expanded=True
+            with st.expander(f"🔥 {order['ID']} - Từ: {order['Nhà máy']}", expanded=True):
+                st.write(f"**Yêu cầu:** {order['Khối lượng']} Tấn {order['Sản phẩm']} | **Giá:** {order['Giá trần']:,.0f} đ/tấn")
+                if st.button(f"Nhận thầu đơn {order['ID']}"):
+                    order["Trạng thái"] = "Đang thu gom (First-mile)"
+                    # Tự động tạo cuốc xe chặng ngắn
+                    trips_needed = int(order['Khối lượng'] / 2) # Giả sử 1 xe ba gác chở 2 tấn
+                    for i in range(trips_needed):
+                        st.session_state.first_mile_trips.append({
+                            "Trip_ID": f"{order['ID']}-FM{i+1}", "Order_ID": order['ID'],
+                            "Trạng thái": "Đang chờ xế", "Khối lượng": 2
+                        })
+                    st.rerun()
+
+    st.markdown("---")
+    st.header("Bước 4: Kiểm tra chất lượng (QC) tại Hub")
+    for order in st.session_state.orders:
+        if order["Trạng thái"] == "Đang thu gom (First-mile)":
+            # Kiểm tra xem các cuốc xe nhỏ đã gom xong chưa
+            related_trips = [t for t in st.session_state.first_mile_trips if t["Order_ID"] == order["ID"]]
+            completed_trips = [t for t in related_trips if t["Trạng thái"] == "Đã hạ tải tại Hub"]
+            
+            st.write(f"**Đơn {order['ID']}**: Đã gom {len(completed_trips)}/{len(related_trips)} cuốc chặng ngắn.")
+            
+            if len(related_trips) > 0 and len(completed_trips) == len(related_trips):
+                with st.container(border=True):
+                    st.write("📸 **AI Computer Vision Check:** Màu sắc vàng óng (Đạt)")
+                    moisture = st.slider(f"Đo độ ẩm lô {order['ID']} bằng Cảm biến (%)", 10, 40, 20)
+                    if st.button(f"Ký duyệt xuất kho {order['ID']}"):
+                        if moisture <= 25:
+                            order["Trạng thái"] = "Chờ xe chặng dài (Middle-mile)"
+                            st.success("Đạt chuẩn ESG & Độ ẩm. Đã đẩy lệnh tìm xe tải lớn!")
+                            st.rerun()
+                        else:
+                            st.error("Độ ẩm >25%. Yêu cầu phơi thêm!")
+
+# =====================================================
+# VAI TRÒ 3: NÔNG DÂN / HTX (FIRST-MILE - MÔ HÌNH GRAB)
+# =====================================================
+elif "Nông dân" in role:
+    st.header("📱 App Nông dân (Grab cho Máy cày/Ba gác)")
+    st.info("💡 Bật app để nhận cuốc vận chuyển rơm từ ruộng về Hub gần nhất.")
+    
+    available_trips = [t for t in st.session_state.first_mile_trips if t["Trạng thái"] == "Đang chờ xế"]
+    
+    col1, col2 = st.columns(2)
+    col1.metric("Thu nhập hôm nay", "0 đ")
+    col2.metric("Điểm tín nhiệm", "4.9/5.0 ⭐")
+
+    if not available_trips:
+        st.write("Hiện không có cuốc xe nào quanh khu vực của bạn.")
+    else:
+        for trip in available_trips:
+            st.markdown(f"""
+            <div class="grab-card">
+                <h4>📍 Cuốc: {trip['Trip_ID']}</h4>
+                <p>Khối lượng: {trip['Khối lượng']} Tấn Rơm | Quãng đường: ~3km</p>
+                <p style="color: #00b14f; font-weight: bold; font-size: 18px;">Thù lao: {FEE_FIRST_MILE:,.0f} VNĐ</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Nhận cuốc {trip['Trip_ID']}"):
+                trip["Trạng thái"] = "Đã hạ tải tại Hub"
+                st.toast(f"Đã hoàn thành cuốc {trip['Trip_ID']}. Tiền sẽ cộng vào Ví!")
+                st.rerun()
+
+# =====================================================
+# VAI TRÒ 4: ĐỐI TÁC VẬN TẢI (MIDDLE-MILE - 3 LAYER LOGISTICS)
+# =====================================================
+elif "Vận tải" in role:
+    st.header("🚛 Sàn Vận tải Chặng dài (Middle-mile)")
+    
+    for order in st.session_state.orders:
+        if order["Trạng thái"] == "Chờ xe chặng dài (Middle-mile)":
+            st.subheader(f"Mã hàng: {order['ID']} - {order['Khối lượng']} Tấn về {order['Nhà máy']}")
+            
+            # Layer 1: Xe rỗng
+            st.markdown(f"""
+            <div class="layer1-card">
+                <b>🥇 Lớp 1: Xe rỗng chiều về (Back-haul)</b> - Ưu tiên hiển thị trước<br>
+                <i>Cước phí (80%): {PRICE_MARKET_TRANSPORT * RATE_LAYER_1:,.0f} VNĐ</i>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Nhận chuyến (Layer 1) - {order['ID']}"):
+                order["Trạng thái"] = "Đã đến Nhà máy"
+                order["Cước_Middle_Mile"] = PRICE_MARKET_TRANSPORT * RATE_LAYER_1
+                st.rerun()
+            
+            # Layer 2: 3PL
+            st.markdown(f"""
+            <div class="layer2-card">
+                <b>🥈 Lớp 2: Đối tác chiến lược (Logivan/EcoTruck)</b><br>
+                <i>Cước phí (90%): {PRICE_MARKET_TRANSPORT * RATE_LAYER_2:,.0f} VNĐ</i>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Điều xe Đối tác (Layer 2) - {order['ID']}"):
+                order["Trạng thái"] = "Đã đến Nhà máy"
+                order["Cước_Middle_Mile"] = PRICE_MARKET_TRANSPORT * RATE_LAYER_2
+                st.rerun()
+
+# =====================================================
+# VAI TRÒ 5: ADMIN & TÀI CHÍNH (BƯỚC 5: AUTO-SPLIT PAYMENT)
+# =====================================================
+elif "Admin" in role:
+    st.header("Cổng Thanh toán MoMo/VNPay & Quản lý Tín dụng")
+    
+    ready_to_split = [o for o in st.session_state.orders if o["Trạng thái"] == "Hoàn tất - Chờ Auto-split"]
+    
+    if not ready_to_split:
+        st.info("Chưa có đơn hàng nào chờ quyết toán.")
+        
+    for order in ready_to_split:
+        with st.container(border=True):
+            st.subheader(f"Lệnh Giải Ngân Đơn {order['ID']}")
+            st.write(f"Tổng tiền từ Nhà máy: **{order['Tổng tiền']:,.0f} VNĐ**")
+            
+            # Tính toán dòng tiền (Giả lập logic)
+            total_first_mile = len([t for t in st.session_state.first_mile_trips if t["Order_ID"] == order["ID"]]) * FEE_FIRST_MILE
+            middle_mile_cost = order.get("Cước_Middle_Mile", PRICE_MARKET_TRANSPORT)
+            platform_fee = order['Tổng tiền'] * 0.05
+            risk_fund = order['Tổng tiền'] * 0.01
+            agent_profit = order['Tổng tiền'] - total_first_mile - middle_mile_cost - platform_fee - risk_fund
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("💸 **Auto-split Payment:**")
+                st.write(f"- Chuyển Nông dân/HTX (First-mile): `{total_first_mile:,.0f} VNĐ`")
+                st.write(f"- Chuyển Đối tác Vận tải (Middle-mile): `{middle_mile_cost:,.0f} VNĐ`")
+                st.write(f"- Phí Sàn AgriLoop (5%): `{platform_fee:,.0f} VNĐ`")
+                st.write(f"- Trích Quỹ Rủi ro (1%): `{risk_fund:,.0f} VNĐ`")
+                st.write(f"- **Thanh toán Đại lý (Lợi nhuận/Tiền rơm):** `{agent_profit:,.0f} VNĐ`")
+            
+            with col2:
+                st.markdown("📈 **Credit Data Provider:**")
+                st.success("Dữ liệu dòng tiền của Đại lý này đã được đồng bộ với Ngân hàng. Đủ điều kiện tăng hạn mức vốn lưu động lên 200 Triệu VNĐ.")
+                
+            if st.button(f"⚡ Thực thi API Giải ngân (MoMo/VNPay) cho {order['ID']}"):
+                order["Trạng thái"] = "Đã thanh toán (Closed)"
+                st.toast("Dòng tiền đã được phân bổ tự động đến các ví thành viên!")
+                st.rerun()
+
+st.markdown("---")
+with st.expander("Sổ cái Hệ thống (Toàn bộ dữ liệu)"):
+    if st.session_state.orders:
+        st.dataframe(pd.DataFrame(st.session_state.orders), use_container_width=True)
