@@ -117,7 +117,7 @@ else:
     # VAI TRÒ: NHÀ MÁY
     # =====================================================
     if role == "🏭 Nhà máy":
-        tab_buy, tab_track, tab_history = st.tabs(["🛒 Lên Đơn Mới", "📍 Theo dõi & Quyết toán", "🧾 Hóa đơn Điện tử"])
+        tab_buy, tab_track, tab_history = st.tabs(["🛒 Lên Đơn Mới & Đặt Cọc", "📍 Theo dõi lộ trình", "🧾 Hóa đơn Điện tử"])
         
         with tab_buy:
             st.header("Tạo Lệnh Thu Mua (Báo giá dự kiến)")
@@ -159,29 +159,37 @@ else:
                         "Chi_Phi_Rơm": base_cost, "Chi_Phi_Chặng_Ngắn": 0.0, "Chi_Phi_Chặng_Dài": 0.0,
                         "Đã_Gom": 0.0, "Hub_Location": "Chưa có", "Tọa_Độ_Hub": [0,0]
                     })
-                    st.success("Đã tạo đơn. Vui lòng chuyển qua tab Theo dõi để thanh toán cọc!")
-                    st.rerun()
+                    st.success("Đã tạo đơn thành công! Vui lòng quét mã QR bên dưới để thanh toán cọc.")
+            
+            # SHOW MÃ QR NGAY BÊN DƯỚI FORM TẠO ĐƠN
+            pending_deposits = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ quét QR Cọc"]
+            if pending_deposits:
+                st.markdown("---")
+                st.subheader("📲 Mã QR Thanh Toán Đặt Cọc")
+                for order in pending_deposits:
+                    with st.container(border=True):
+                        col_qr, col_info = st.columns([1, 2])
+                        with col_qr: 
+                            st.image("https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg", width=150)
+                        with col_info:
+                            st.write(f"**Mã đơn hàng:** {order['ID']}")
+                            st.write(f"**Số tiền cọc (30%):** <span style='color:#d32f2f; font-size:20px; font-weight:bold;'>{order['Tiền_Cọc']:,.0f} VNĐ</span>", unsafe_allow_html=True)
+                            st.write("Nội dung CK: `CK COCC AGRILOOP " + order['ID'] + "`")
+                            if st.button(f"✅ Mô phỏng: Đã thanh toán xong ({order['ID']})"):
+                                order["Trạng thái"] = "Sẵn sàng cho Đại lý"
+                                st.rerun()
 
         with tab_track:
             st.header("Trạng Thái Đơn Hàng Liên Tục")
-            active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] != "Hoàn tất"]
+            active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Cọc"]]
             
             if not active_factory_orders:
-                st.info("Hiện không có đơn hàng nào đang xử lý.")
+                st.info("Hiện không có đơn hàng nào đang trong quá trình vận chuyển/thu gom.")
                 
             for order in active_factory_orders:
                 with st.expander(f"📦 Đơn {order['ID']} - {order['Khối lượng']} Tấn {order['Sản phẩm']} | Trạng thái: {order['Trạng thái']}", expanded=True):
-                    
-                    if order["Trạng thái"] == "Chờ quét QR Cọc":
-                        col_qr, col_info = st.columns([1, 2])
-                        with col_qr: st.image("https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg", width=150)
-                        with col_info:
-                            st.subheader(f"Thanh toán cọc: {order['Tiền_Cọc']:,.0f} VNĐ")
-                            if st.button(f"Mô phỏng: Đã thanh toán ({order['ID']})"):
-                                order["Trạng thái"] = "Sẵn sàng cho Đại lý"
-                                st.rerun()
                                 
-                    elif order["Trạng thái"] in ["Sẵn sàng cho Đại lý", "Đại lý đang gom", "Chờ xe chặng dài"]:
+                    if order["Trạng thái"] in ["Sẵn sàng cho Đại lý", "Đại lý đang gom", "Chờ xe chặng dài"]:
                         st.info("🔄 Hệ thống đang xử lý và thu gom nguyên liệu tại địa phương.")
                         progress = 0
                         if order["Trạng thái"] == "Sẵn sàng cho Đại lý": progress = 20
@@ -193,7 +201,6 @@ else:
                         col_map, col_bill = st.columns([1.2, 1])
                         with col_map:
                             st.markdown("### 📍 Live Tracking (Bản đồ xe chạy)")
-                            # Giả lập tọa độ bản đồ di chuyển
                             map_data = pd.DataFrame({'lat': [9.7150 + random.uniform(-0.01, 0.01)], 'lon': [105.8150 + random.uniform(-0.01, 0.01)]})
                             st.map(map_data, zoom=10)
                             st.caption(f"Đang di chuyển từ Hub {order['Hub_Location']} đến {order['Địa chỉ']}.")
@@ -213,7 +220,7 @@ else:
                                 order["Tổng_Thực_Tế"] = actual_total
                                 order["Phí_Sàn_Thực_Tế"] = actual_subtotal * cfg["platform_fee_rate"]
                                 order["Quỹ_Rủi_Ro"] = actual_total * cfg["risk_fund_rate"]
-                                st.session_state.agent_points += 100 # Thưởng 100 điểm khi giao thành công
+                                st.session_state.agent_points += 100 
                                 st.rerun()
 
         with tab_history:
@@ -261,7 +268,6 @@ else:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-
     # =====================================================
     # VAI TRÒ: ĐẠI LÝ
     # =====================================================
@@ -420,3 +426,4 @@ else:
                         order["Trạng thái"] = "Sẵn sàng cho Đại lý"
                         st.session_state.agent_points -= 20
                         st.rerun()
+
