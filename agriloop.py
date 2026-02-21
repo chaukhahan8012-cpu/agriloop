@@ -231,11 +231,11 @@ elif role == "🌾 Nông dân (Zalo Mini App)":
 elif role == "👑 Admin (Tổng quan & Phân tích)":
     st.header("Trạm Điều Hành Trung Tâm AgriLoop")
     
-    # Tính toán KPIs
-    completed_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Hoàn tất"]
-    total_revenue = sum(o["Tổng tiền"] for o in completed_orders)
-    total_platform_fee = sum(o["Phí sàn"] for o in completed_orders)
-    total_volume = sum(o["Khối lượng"] for o in completed_orders)
+    # Tính toán KPIs an toàn (dùng .get để tránh lỗi thiếu key)
+    completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
+    total_revenue = sum(o.get("Tổng tiền", 0) for o in completed_orders)
+    total_platform_fee = sum(o.get("Phí sàn", 0) for o in completed_orders)
+    total_volume = sum(o.get("Khối lượng", 0) for o in completed_orders)
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Tổng Doanh Thu Giao Dịch", f"{total_revenue / 1000000:,.1f} Tr")
@@ -248,28 +248,28 @@ elif role == "👑 Admin (Tổng quan & Phân tích)":
     
     with col_map:
         st.subheader("📍 Bản đồ Mạng lưới Đối tác ĐBSCL")
-        # Giả lập tọa độ các Hub và Nhà máy ở ĐBSCL (Cần Thơ, Hậu Giang, Sóc Trăng, Bạc Liêu...)
+        # Bản đồ mặc định, không ép màu để tránh lỗi phiên bản Streamlit cũ
         map_data = pd.DataFrame({
             'lat': [10.0451, 9.7803, 9.6000, 9.2941], 
             'lon': [105.7468, 105.4746, 105.9750, 105.7278]
         })
-        st.map(map_data, size=20, color="#2e7d32")
+        st.map(map_data)
         
     with col_chart:
         st.subheader("📊 Phân tích Tỷ trọng Sản phẩm")
         if completed_orders:
             df_chart = pd.DataFrame(completed_orders)
-            chart_data = df_chart.groupby("Sản phẩm")["Khối lượng"].sum()
-            st.bar_chart(chart_data, color="#ff9800")
+            if "Sản phẩm" in df_chart.columns and "Khối lượng" in df_chart.columns:
+                chart_data = df_chart.groupby("Sản phẩm")["Khối lượng"].sum()
+                st.bar_chart(chart_data) # Bỏ tham số color
         else:
-            st.info("Chưa đủ dữ liệu để vẽ biểu đồ.")
+            st.info("Chưa đủ dữ liệu hoàn tất để vẽ biểu đồ.")
 
     st.markdown("---")
     st.subheader("📜 Sổ Cái Lịch Sử Giao Dịch (Ledger Toàn Hệ Thống)")
     if st.session_state.orders:
         df_all = pd.DataFrame(st.session_state.orders)
-        # Sắp xếp để xem cột quan trọng trước
-        cols_to_show = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng tiền", "Phí sàn"]
-        st.dataframe(df_all[cols_to_show], use_container_width=True)
-    else:
-        st.write("Hệ thống chưa có giao dịch.")
+        
+        # BỘ LỌC CỘT THÔNG MINH: Chỉ hiển thị những cột thực sự tồn tại để chống lỗi KeyError
+        desired_cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng tiền", "Phí sàn", "Đã gom"]
+        existing_cols = [col for col in desired
