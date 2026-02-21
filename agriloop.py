@@ -272,4 +272,8 @@ elif role == "👑 Admin (Tổng quan & Phân tích)":
         
         # BỘ LỌC CỘT THÔNG MINH: Chỉ hiển thị những cột thực sự tồn tại để chống lỗi KeyError
         desired_cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng tiền", "Phí sàn", "Đã gom"]
-        existing_cols = [col for col in desired
+        existing_cols = [col for col in desired_cols if col in df_all.columns]
+        
+        st.dataframe(df_all[existing_cols], use_container_width=True)
+    else:
+        st.write("Hệ thống chưa có giao dịch.")
