@@ -29,8 +29,8 @@ PLATFORM_FEE_RATE = 0.05
 # ==========================
 if "orders" not in st.session_state:
     st.session_state.orders = [
-        {"ID": "AL001", "Nhà máy": "NM Điện Sinh Khối Cần Thơ", "Địa chỉ": "Ô Môn, Cần Thơ", "Sản phẩm": "Rơm cuộn", "Khối lượng": 120, "Deadline": "2026-03-01", "Trạng thái": "Hoàn tất", "Tổng tiền": 132300000, "Phí sàn": 6300000, "Đã gom": 120, "Tiền cọc": 39690000},
-        {"ID": "AL002", "Nhà máy": "NM Phân Bón Sóc Trăng", "Địa chỉ": "KCN An Nghiệp, Sóc Trăng", "Sản phẩm": "Rơm rời", "Khối lượng": 80, "Deadline": "2026-03-15", "Trạng thái": "Hoàn tất", "Tổng tiền": 67200000, "Phí sàn": 3200000, "Đã gom": 80, "Tiền cọc": 20160000}
+        {"ID": "AL001", "Nhà máy": "NM Điện Sinh Khối Cần Thơ", "Địa chỉ": "Ô Môn, Cần Thơ", "Sản phẩm": "Rơm cuộn", "Khối lượng": 120.0, "Deadline": "2026-03-01", "Trạng thái": "Hoàn tất", "Tổng tiền": 132300000, "Phí sàn": 6300000, "Đã gom": 120.0, "Tiền cọc": 39690000},
+        {"ID": "AL002", "Nhà máy": "NM Phân Bón Sóc Trăng", "Địa chỉ": "KCN An Nghiệp, Sóc Trăng", "Sản phẩm": "Rơm rời", "Khối lượng": 80.5, "Deadline": "2026-03-15", "Trạng thái": "Hoàn tất", "Tổng tiền": 67620000, "Phí sàn": 3220000, "Đã gom": 80.5, "Tiền cọc": 20286000}
     ]
 if "farmer_offers" not in st.session_state:
     st.session_state.farmer_offers = [] 
@@ -67,7 +67,10 @@ if role == "🏭 Nhà máy":
         
         col3, col4, col5 = st.columns(3)
         product = col3.selectbox("Loại phụ phẩm", ["Rơm cuộn", "Rơm rời"])
-        weight = col4.number_input("Khối lượng cần mua (Tấn)", min_value=10, value=50)
+        
+        # ĐÃ SỬA CHỖ NÀY: Cho phép Nhà máy gõ số thập phân tự do (vd: 50.5 tấn)
+        weight = col4.number_input("Khối lượng cần mua (Tấn)", min_value=1.0, value=50.0, step=0.5, format="%.1f")
+        
         deadline = col5.date_input("Hạn chót nhận hàng")
         
         base_cost = weight * PRICES[product]
@@ -95,7 +98,7 @@ if role == "🏭 Nhà máy":
                 "ID": new_id, "Nhà máy": factory_name, "Địa chỉ": address,
                 "Sản phẩm": product, "Khối lượng": weight, "Deadline": str(deadline),
                 "Trạng thái": "Chờ quét QR Cọc", "Tổng tiền": total_cost, "Phí sàn": platform_fee,
-                "Đã gom": 0, "Tiền cọc": deposit_amount
+                "Đã gom": 0.0, "Tiền cọc": deposit_amount
             })
             st.success("Đã tạo đơn. Vui lòng thanh toán cọc bên dưới!")
             st.rerun()
@@ -212,7 +215,6 @@ elif role == "🌾 Nông dân (Zalo Mini App)":
             f_name = st.text_input("Tên của bạn", "Chú Ba Thắng")
             f_address = st.text_input("Địa chỉ ruộng", "Xã Vĩnh Bình, Hòa Bình")
             
-            # Cho phép nông dân nhập số liệu trực tiếp (gõ số)
             f_weight = st.number_input("Nhập số lượng rơm bạn có (Tấn):", min_value=0.1, value=5.0, step=0.5, format="%.1f")
             
             f_method = st.radio("Phương thức giao nhận:", ["Đại lý lại gom", "Tự đem lại Hub"])
@@ -231,7 +233,6 @@ elif role == "🌾 Nông dân (Zalo Mini App)":
 elif role == "👑 Admin (Tổng quan & Phân tích)":
     st.header("Trạm Điều Hành Trung Tâm AgriLoop")
     
-    # Tính toán KPIs an toàn (dùng .get để tránh lỗi thiếu key)
     completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
     total_revenue = sum(o.get("Tổng tiền", 0) for o in completed_orders)
     total_platform_fee = sum(o.get("Phí sàn", 0) for o in completed_orders)
@@ -248,7 +249,6 @@ elif role == "👑 Admin (Tổng quan & Phân tích)":
     
     with col_map:
         st.subheader("📍 Bản đồ Mạng lưới Đối tác ĐBSCL")
-        # Bản đồ mặc định, không ép màu để tránh lỗi phiên bản Streamlit cũ
         map_data = pd.DataFrame({
             'lat': [10.0451, 9.7803, 9.6000, 9.2941], 
             'lon': [105.7468, 105.4746, 105.9750, 105.7278]
@@ -261,7 +261,7 @@ elif role == "👑 Admin (Tổng quan & Phân tích)":
             df_chart = pd.DataFrame(completed_orders)
             if "Sản phẩm" in df_chart.columns and "Khối lượng" in df_chart.columns:
                 chart_data = df_chart.groupby("Sản phẩm")["Khối lượng"].sum()
-                st.bar_chart(chart_data) # Bỏ tham số color
+                st.bar_chart(chart_data) 
         else:
             st.info("Chưa đủ dữ liệu hoàn tất để vẽ biểu đồ.")
 
@@ -270,7 +270,6 @@ elif role == "👑 Admin (Tổng quan & Phân tích)":
     if st.session_state.orders:
         df_all = pd.DataFrame(st.session_state.orders)
         
-        # BỘ LỌC CỘT THÔNG MINH: Chỉ hiển thị những cột thực sự tồn tại để chống lỗi KeyError
         desired_cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng tiền", "Phí sàn", "Đã gom"]
         existing_cols = [col for col in desired_cols if col in df_all.columns]
         
