@@ -17,6 +17,11 @@ st.markdown("""
     .driver-card { border-left: 4px solid #00b14f; padding: 15px; background: #e8f5e9; margin-bottom: 10px; border-radius: 5px;}
     .metric-card { background-color: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
     .login-container { max-width: 500px; margin: 0 auto; padding: 30px; background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-top: 5px solid #2e7d32; }
+    .timeline-container { border-left: 3px solid #4caf50; padding-left: 20px; margin-left: 10px; }
+    .timeline-item { margin-bottom: 15px; position: relative; }
+    .timeline-item::before { content: ''; position: absolute; left: -27.5px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background-color: #4caf50; }
+    .timeline-item.past::before { background-color: #bdbdbd; }
+    .timeline-item.past { border-left-color: #bdbdbd; color: gray; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -74,7 +79,6 @@ if not st.session_state.is_logged_in:
                 ["🏭 Nhà máy", "🏪 Đại lý (Hub)", "🌾 Nông dân", "🚛 Tài xế", "👑 Admin"]
             )
             
-            # Phân loại tài xế ngay từ lúc đăng nhập
             driver_type = ""
             if role_select == "🚛 Tài xế":
                 driver_type = st.radio("Bạn chạy tuyến nào?", 
@@ -101,7 +105,6 @@ if not st.session_state.is_logged_in:
 else:
     role = st.session_state.current_role
     
-    # SIDEBAR SAU KHI LOG IN
     st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2664/2664552.png", width=80)
     st.sidebar.title("AgriLoop MVP")
     st.sidebar.markdown(f"**👤 Xin chào:** {st.session_state.username}")
@@ -158,7 +161,7 @@ else:
 
         pending_delivery = [o for o in st.session_state.orders if o["Trạng thái"] in ["Chờ quét QR Cọc", "Đang giao đến Nhà máy"]]
         if pending_delivery:
-            st.header("2. Xử lý Đơn hàng hiện tại")
+            st.header("2. Theo dõi Đơn hàng & Quyết toán")
             for order in pending_delivery:
                 if order["Trạng thái"] == "Chờ quét QR Cọc":
                     st.markdown("---")
@@ -170,12 +173,55 @@ else:
                         if st.button(f"Mô phỏng: Đã thanh toán {order['Tiền cọc']:,.0f} VNĐ ({order['ID']})"):
                             order["Trạng thái"] = "Sẵn sàng cho Đại lý"
                             st.rerun()
+                
+                # BỔ SUNG TÍNH NĂNG LIVE TRACKING KIỂU SHOPEE TẠI ĐÂY
                 elif order["Trạng thái"] == "Đang giao đến Nhà máy":
-                    st.warning(f"🚛 Đơn {order['ID']} ({order['Khối lượng']} Tấn) đang trên đường đến nhà máy!")
-                    if st.button(f"✅ Xác nhận đã nhận hàng & Quyết toán ({order['ID']})"):
-                        order["Trạng thái"] = "Hoàn tất"
-                        st.success("Giao dịch hoàn tất! Vui lòng kiểm tra Hóa đơn và Đánh giá Đại lý ở phần Lịch sử bên dưới.")
-                        st.rerun()
+                    with st.expander(f"📍 Theo dõi lộ trình đơn {order['ID']} (Live Tracking)", expanded=True):
+                        st.warning(f"🚛 Đơn hàng {order['Khối lượng']} Tấn đang trên đường đến {order['Địa chỉ']}!")
+                        
+                        col_timeline, col_map = st.columns([1, 1.2])
+                        
+                        with col_timeline:
+                            st.markdown("### Lộ trình vận chuyển")
+                            st.markdown(f"""
+                            <div class="timeline-container">
+                                <div class="timeline-item">
+                                    <b>Đang giao hàng</b><br>
+                                    Tài xế đang di chuyển trên Quốc Lộ 1A (Cách nhà máy 15km). Dự kiến giao trong 45 phút nữa.
+                                </div>
+                                <div class="timeline-item past">
+                                    <b>Đã xuất kho</b><br>
+                                    Hàng đã rời khỏi Hub Đại lý Sóc Trăng.
+                                </div>
+                                <div class="timeline-item past">
+                                    <b>Đóng gói hoàn tất</b><br>
+                                    Đã gom và kiểm định đủ {order['Khối lượng']} Tấn {order['Sản phẩm']}.
+                                </div>
+                                <div class="timeline-item past">
+                                    <b>Đại lý tiếp nhận</b><br>
+                                    Đại lý đã xác nhận thầu và tiến hành thu gom.
+                                </div>
+                                <div class="timeline-item past">
+                                    <b>Đã đặt cọc</b><br>
+                                    Đơn hàng đã được xác nhận thanh toán cọc 30%.
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button(f"✅ Xác nhận đã nhận hàng & Quyết toán ({order['ID']})", use_container_width=True):
+                                order["Trạng thái"] = "Hoàn tất"
+                                st.success("Giao dịch hoàn tất! Vui lòng kiểm tra Hóa đơn và Đánh giá Đại lý ở phần Lịch sử bên dưới.")
+                                st.rerun()
+                                
+                        with col_map:
+                            st.markdown("### Vị trí xe tải trực tiếp")
+                            # Mô phỏng xe đang chạy trên tuyến Sóc Trăng - Hậu Giang/Cần Thơ
+                            map_data = pd.DataFrame({
+                                'lat': [9.7150], 
+                                'lon': [105.8150]
+                            })
+                            st.map(map_data, zoom=10)
 
         st.markdown("---")
         st.header("3. Lịch sử Mua hàng & Hóa đơn")
