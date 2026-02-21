@@ -40,7 +40,7 @@ if "orders" not in st.session_state:
 if "farmer_offers" not in st.session_state:
     st.session_state.farmer_offers = [] 
 if "agent_points" not in st.session_state:
-    st.session_state.agent_points = 250 # Điểm khởi tạo
+    st.session_state.agent_points = 250 
 
 def get_agent_tier(points):
     if points < 500: return "Đồng 🥉", "#795548"
@@ -93,12 +93,13 @@ if not st.session_state.is_logged_in:
                     st.rerun()
 
 # =====================================================
-# GIAO DIỆN CHÍNH
+# GIAO DIỆN CHÍNH (ĐÃ ĐĂNG NHẬP)
 # =====================================================
 else:
     role = st.session_state.current_role
     cfg = st.session_state.system_config
     
+    # ------------------ MENU SIDEBAR ------------------
     st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2664/2664552.png", width=80)
     st.sidebar.title("AgriLoop MVP")
     st.sidebar.markdown(f"**👤 Xin chào:** {st.session_state.username}")
@@ -107,370 +108,399 @@ else:
     if role == "🏪 Đại lý (Hub)":
         tier_name, tier_color = get_agent_tier(st.session_state.agent_points)
         st.sidebar.markdown(f"**📍 Hub:** {st.session_state.agent_address}")
-        st.sidebar.markdown(f"**🌟 Hạng Đại lý:** <span style='color:{tier_color}; font-weight:bold;'>{tier_name} ({st.session_state.agent_points} pt)</span>", unsafe_allow_html=True)
-        
+        st.sidebar.markdown(f"**🌟 Hạng:** <span style='color:{tier_color}; font-weight:bold;'>{tier_name} ({st.session_state.agent_points} pt)</span>", unsafe_allow_html=True)
+    
+    st.sidebar.markdown("---")
+    
+    # CHỨC NĂNG ĐIỀU HƯỚNG TRANG (NAVIGATION)
+    page_selection = st.sidebar.radio("ĐIỀU HƯỚNG:", ["📍 Bảng điều khiển", "📜 Lịch sử giao dịch"])
+    
     st.sidebar.markdown("---")
     st.sidebar.button("🚪 Đăng xuất", on_click=logout)
-    st.title(f"{role}")
 
-    # =====================================================
-    # VAI TRÒ: NHÀ MÁY
-    # =====================================================
-    if role == "🏭 Nhà máy":
-        tab_buy, tab_track, tab_history = st.tabs(["🛒 Lên Đơn Mới & Đặt Cọc", "📍 Theo dõi lộ trình", "🧾 Hóa đơn Điện tử"])
-        
-        with tab_buy:
-            st.header("Tạo Lệnh Thu Mua (Báo giá dự kiến)")
-            with st.form("factory_order"):
-                col1, col2 = st.columns(2)
-                factory_name = col1.text_input("Tên Nhà máy", st.session_state.username)
-                address = col2.text_input("Địa chỉ giao hàng", "KCN Sông Hậu, Hậu Giang")
-                
-                col3, col4, col5 = st.columns(3)
-                product = col3.selectbox("Loại phụ phẩm", ["Rơm cuộn", "Rơm rời"])
-                weight = col4.number_input("Khối lượng cần mua (Tấn)", min_value=1.0, value=50.0, step=0.5, format="%.1f")
-                deadline = col5.date_input("Hạn chót nhận hàng")
-                
-                base_price = cfg["price_rom_cuon"] if product == "Rơm cuộn" else cfg["price_rom_roi"]
-                base_cost = weight * base_price
-                shipping_est = weight * (cfg["shipping_short_per_ton"] + cfg["shipping_long_per_ton"])
-                subtotal = base_cost + shipping_est
-                platform_fee = subtotal * cfg["platform_fee_rate"]
-                total_est = subtotal + platform_fee
-                deposit_amount = total_est * 0.3 
-                
-                st.markdown(f"""
-                <div class="invoice-box">
-                    <h4>🧾 Hóa đơn Dự kiến (Tạm tính)</h4>
-                    <p>- Tiền rơm: {base_cost:,.0f} đ</p>
-                    <p>- Phí vận chuyển dự kiến: {shipping_est:,.0f} đ</p>
-                    <p>- Phí sàn AgriLoop: {platform_fee:,.0f} đ</p>
-                    <h3 style="color: #2e7d32;">Tổng dự kiến: {total_est:,.0f} đ</h3>
-                    <p style="color: #d32f2f; font-weight: bold;">⚠️ Yêu cầu thanh toán cọc 30%: {deposit_amount:,.0f} đ</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                if st.form_submit_button("Xác nhận & Xuất mã QR Cọc"):
-                    new_id = f"AL{len(st.session_state.orders)+1:03}"
-                    st.session_state.orders.append({
-                        "ID": new_id, "Nhà máy": factory_name, "Địa chỉ": address,
-                        "Sản phẩm": product, "Khối lượng": weight, "Deadline": str(deadline),
-                        "Trạng thái": "Chờ quét QR Cọc", "Tổng_Dự_Kiến": total_est, "Tiền_Cọc": deposit_amount,
-                        "Chi_Phi_Rơm": base_cost, "Chi_Phi_Chặng_Ngắn": 0.0, "Chi_Phi_Chặng_Dài": 0.0,
-                        "Đã_Gom": 0.0, "Hub_Location": "Chưa có"
-                    })
-                    st.success("Đã tạo đơn thành công! Vui lòng quét mã QR bên dưới để thanh toán cọc.")
-            
-            pending_deposits = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ quét QR Cọc"]
-            if pending_deposits:
-                st.markdown("---")
-                st.subheader("📲 Mã QR Thanh Toán Đặt Cọc")
-                for order in pending_deposits:
-                    with st.container(border=True):
-                        col_qr, col_info = st.columns([1, 2])
-                        with col_qr: 
-                            st.image("https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg", width=150)
-                        with col_info:
-                            st.write(f"**Mã đơn hàng:** {order['ID']}")
-                            st.write(f"**Số tiền cọc (30%):** <span style='color:#d32f2f; font-size:20px; font-weight:bold;'>{order['Tiền_Cọc']:,.0f} VNĐ</span>", unsafe_allow_html=True)
-                            st.write("Nội dung CK: `CK COCC AGRILOOP " + order['ID'] + "`")
-                            if st.button(f"✅ Mô phỏng: Đã thanh toán xong ({order['ID']})"):
-                                order["Trạng thái"] = "Sẵn sàng cho Đại lý"
-                                st.rerun()
+    # ==================================================================================
+    # TRANG 1: BẢNG ĐIỀU KHIỂN (DASHBOARD) - CHỈ CHỨA CÁC THAO TÁC ĐANG XỬ LÝ
+    # ==================================================================================
+    if page_selection == "📍 Bảng điều khiển":
+        st.title(f"{role} - Bảng điều khiển")
 
-        with tab_track:
-            st.header("Trạng Thái Đơn Hàng Liên Tục")
-            active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Cọc", "Đã hủy bởi Admin"]]
+        # ----------------- NHÀ MÁY -----------------
+        if role == "🏭 Nhà máy":
+            tab_buy, tab_track = st.tabs(["🛒 Lên Đơn Mới & Đặt Cọc", "📍 Theo dõi lộ trình Live"])
             
-            if not active_factory_orders:
-                st.info("Hiện không có đơn hàng nào đang trong quá trình vận chuyển/thu gom.")
-                
-            for order in active_factory_orders:
-                with st.expander(f"📦 Đơn {order['ID']} - {order['Khối lượng']} Tấn {order['Sản phẩm']} | Trạng thái: {order['Trạng thái']}", expanded=True):
-                                
-                    if order["Trạng thái"] in ["Sẵn sàng cho Đại lý", "Đại lý đang gom", "Chờ xe chặng dài"]:
-                        st.info("🔄 Hệ thống đang xử lý và thu gom nguyên liệu tại địa phương.")
-                        progress = 0
-                        if order["Trạng thái"] == "Sẵn sàng cho Đại lý": progress = 20
-                        elif order["Trạng thái"] == "Đại lý đang gom": progress = 50
-                        elif order["Trạng thái"] == "Chờ xe chặng dài": progress = 80
-                        st.progress(progress / 100.0, text=f"Tiến độ tổng thể: {progress}%")
+            with tab_buy:
+                st.header("Tạo Lệnh Thu Mua")
+                with st.form("factory_order"):
+                    col1, col2 = st.columns(2)
+                    factory_name = col1.text_input("Tên Nhà máy", st.session_state.username)
+                    address = col2.text_input("Địa chỉ giao hàng", "KCN Sông Hậu, Hậu Giang")
                     
-                    elif order["Trạng thái"] == "Đang giao đến Nhà máy":
-                        col_map, col_bill = st.columns([1.2, 1])
-                        with col_map:
-                            st.markdown("### 📍 Live Tracking (Bản đồ xe chạy)")
-                            map_data = pd.DataFrame({'lat': [9.7150 + random.uniform(-0.01, 0.01)], 'lon': [105.8150 + random.uniform(-0.01, 0.01)]})
-                            st.map(map_data, zoom=10)
-                            st.caption(f"Đang di chuyển từ Hub {order['Hub_Location']} đến {order['Địa chỉ']}.")
-                            
-                        with col_bill:
-                            st.markdown("### 📊 Quyết Toán Thực Tế")
-                            actual_shipping = order['Chi_Phi_Chặng_Ngắn'] + order['Chi_Phi_Chặng_Dài']
-                            actual_subtotal = order['Chi_Phi_Rơm'] + actual_shipping
-                            actual_total = actual_subtotal + (actual_subtotal * cfg["platform_fee_rate"])
-                            
-                            st.write(f"- Tiền rơm: **{order['Chi_Phi_Rơm']:,.0f} đ**")
-                            st.write(f"- Vận chuyển thực tế: **{actual_shipping:,.0f} đ**")
-                            st.write(f"- **TỔNG THỰC TẾ: <span style='color:#1976d2;'>{actual_total:,.0f} đ</span>**", unsafe_allow_html=True)
-                            
-                            if st.button(f"✅ ĐÃ NHẬN HÀNG - XUẤT HÓA ĐƠN ({order['ID']})", use_container_width=True):
-                                order["Trạng thái"] = "Hoàn tất"
-                                order["Tổng_Thực_Tế"] = actual_total
-                                order["Phí_Sàn_Thực_Tế"] = actual_subtotal * cfg["platform_fee_rate"]
-                                order["Quỹ_Rủi_Ro"] = actual_total * cfg["risk_fund_rate"]
-                                st.session_state.agent_points += 100 
-                                st.rerun()
-
-        with tab_history:
-            st.header("Hóa Đơn Điện Tử (E-Invoice)")
-            factory_history = [o for o in st.session_state.orders if o["Trạng thái"] == "Hoàn tất"]
-            
-            if not factory_history:
-                st.info("Chưa có hóa đơn nào được xuất.")
-                
-            for order in factory_history:
-                with st.expander(f"🧾 Hóa đơn số #{order['ID']} - {order['Deadline']}", expanded=False):
-                    final_payment = order['Tổng_Thực_Tế'] - order['Tiền_Cọc']
+                    col3, col4, col5 = st.columns(3)
+                    product = col3.selectbox("Loại phụ phẩm", ["Rơm cuộn", "Rơm rời"])
+                    weight = col4.number_input("Khối lượng cần mua (Tấn)", min_value=1.0, value=50.0, step=0.5, format="%.1f")
+                    deadline = col5.date_input("Hạn chót nhận hàng")
+                    
+                    base_price = cfg["price_rom_cuon"] if product == "Rơm cuộn" else cfg["price_rom_roi"]
+                    base_cost = weight * base_price
+                    shipping_est = weight * (cfg["shipping_short_per_ton"] + cfg["shipping_long_per_ton"])
+                    subtotal = base_cost + shipping_est
+                    platform_fee = subtotal * cfg["platform_fee_rate"]
+                    total_est = subtotal + platform_fee
+                    deposit_amount = total_est * 0.3 
+                    
                     st.markdown(f"""
-                    <div class="invoice-final">
-                        <div class="watermark">ĐÃ THANH TOÁN</div>
-                        <h3 style="text-align: center; color: #1976d2; margin-bottom: 0;">HÓA ĐƠN ĐIỆN TỬ (GTGT)</h3>
-                        <p style="text-align: center; color: gray;">Đơn vị phát hành: Sàn Giao Dịch AgriLoop</p>
-                        <hr>
-                        <div style="display:flex; justify-content: space-between;">
-                            <div>
-                                <p><b>Mã giao dịch:</b> {order['ID']}</p>
-                                <p><b>Đơn vị mua:</b> {order['Nhà máy']}</p>
-                                <p><b>Đại lý cung cấp:</b> Hub {order['Hub_Location']}</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p><b>Ngày xuất:</b> {datetime.now().strftime('%d/%m/%Y')}</p>
-                                <p><b>Loại hàng:</b> {order['Sản phẩm']}</p>
-                            </div>
-                        </div>
-                        <table style="width: 100%; margin-top: 15px; border-collapse: collapse;">
-                            <tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">
-                                <th style="padding: 8px; text-align: left;">Diễn giải</th>
-                                <th style="padding: 8px; text-align: right;">Thành tiền (VNĐ)</th>
-                            </tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Tiền hàng ({order['Khối lượng']} Tấn)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Rơm']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng ngắn</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Ngắn']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng dài</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Dài']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí dịch vụ nền tảng (Đã gồm thuế)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Phí_Sàn_Thực_Tế']:,.0f}</td></tr>
-                        </table>
-                        <br>
-                        <div style="text-align: right; font-size: 18px;">
-                            <p>Tổng cộng: <b>{order['Tổng_Thực_Tế']:,.0f} VNĐ</b></p>
-                            <p style="color: gray; font-size: 14px;">Trừ Tạm ứng (Cọc 30%): -{order['Tiền_Cọc']:,.0f} VNĐ</p>
-                            <h3 style="color: #2e7d32; margin-top: 5px;">Thanh toán đợt cuối: {final_payment:,.0f} VNĐ</h3>
-                        </div>
+                    <div class="invoice-box">
+                        <h4>🧾 Hóa đơn Dự kiến (Tạm tính)</h4>
+                        <p>- Tiền rơm: {base_cost:,.0f} đ</p>
+                        <p>- Phí vận chuyển dự kiến: {shipping_est:,.0f} đ</p>
+                        <p>- Phí sàn AgriLoop: {platform_fee:,.0f} đ</p>
+                        <h3 style="color: #2e7d32;">Tổng dự kiến: {total_est:,.0f} đ</h3>
+                        <p style="color: #d32f2f; font-weight: bold;">⚠️ Yêu cầu thanh toán cọc 30%: {deposit_amount:,.0f} đ</p>
                     </div>
                     """, unsafe_allow_html=True)
-
-    # =====================================================
-    # VAI TRÒ: ĐẠI LÝ
-    # =====================================================
-    elif role == "🏪 Đại lý (Hub)":
-        st.header(f"Chợ Lệnh Thu Mua")
-        available_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Sẵn sàng cho Đại lý"]
-        for order in available_orders:
-            with st.container(border=True):
-                col_a, col_b = st.columns([3, 1])
-                with col_a:
-                    st.write(f"🏭 **{order['Nhà máy']}** cần **{order['Khối lượng']} Tấn {order['Sản phẩm']}**")
-                with col_b:
-                    if st.button(f"Nhận thầu (+20đ) | {order['ID']}"):
-                        order["Trạng thái"] = "Đại lý đang gom"
-                        order["Hub_Location"] = st.session_state.agent_address
-                        st.session_state.agent_points += 20
-                        st.rerun()
-
-        st.markdown("---")
-        st.header("Trung Tâm Thu Gom")
-        active_orders = [o for o in st.session_state.orders if o["Trạng thái"] in ["Đại lý đang gom", "Chờ xe chặng dài"]]
-        for order in active_orders:
-            st.subheader(f"📦 Đơn {order['ID']} - {order['Nhà máy']}")
-            progress_pct = min(order['Đã_Gom'] / order['Khối lượng'], 1.0)
-            st.progress(progress_pct, text=f"Đã gom {order['Đã_Gom']}/{order['Khối lượng']} Tấn")
-            
-            if order["Trạng thái"] == "Đại lý đang gom":
-                if st.button(f"📢 Phát tín hiệu tìm rơm qua Zalo ({order['ID']})"):
-                    order["Broadcast_Zalo"] = True
-                    st.toast("Đã gửi tin nhắn Zalo hàng loạt!")
                     
-                offers = [f for f in st.session_state.farmer_offers if f["Order_ID"] == order["ID"]]
-                for offer in offers:
-                    with st.container(border=True):
-                        st.write(f"🧑‍🌾 **{offer['Tên']}** - Cung cấp: **{offer['Khối lượng']} Tấn**")
-                        if offer["Trạng thái"] == "Nông dân tự giao":
-                            if st.button(f"👉 Xác nhận đã nhập kho ({offer['ID']})"):
-                                offer["Trạng thái"] = "Đã nhập kho"
-                                order["Đã_Gom"] += offer["Khối lượng"]
-                                st.rerun()
-                        elif offer["Trạng thái"] == "Chờ Đại lý xác nhận gom":
-                            if st.button(f"📡 Chấp nhận & Gọi xe ba gác ({offer['ID']})"):
-                                offer["Trạng thái"] = "Chờ Tài xế chặng ngắn"
-                                st.rerun()
-                        elif offer["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]:
-                            st.info("⏳ Đang điều phối xe chặng ngắn...")
-                        elif offer["Trạng thái"] == "Đã nhập kho":
-                            st.success(f"✅ Đã nhập kho.")
+                    if st.form_submit_button("Xác nhận & Xuất mã QR Cọc"):
+                        new_id = f"AL{len(st.session_state.orders)+1:03}"
+                        st.session_state.orders.append({
+                            "ID": new_id, "Nhà_Máy_Owner": st.session_state.username, "Nhà máy": factory_name, "Địa chỉ": address,
+                            "Sản phẩm": product, "Khối lượng": weight, "Deadline": str(deadline),
+                            "Trạng thái": "Chờ quét QR Cọc", "Tổng_Dự_Kiến": total_est, "Tiền_Cọc": deposit_amount,
+                            "Chi_Phi_Rơm": base_cost, "Chi_Phi_Chặng_Ngắn": 0.0, "Chi_Phi_Chặng_Dài": 0.0,
+                            "Đã_Gom": 0.0, "Hub_Location": "Chưa có", "Tọa_Độ_Hub": [0,0]
+                        })
+                        st.success("Đã tạo đơn thành công! Vui lòng thanh toán cọc bên dưới.")
                 
-                if order['Đã_Gom'] >= order['Khối lượng']:
-                    st.success("✅ Kho đã đầy - Đã chốt chi phí chặng ngắn thực tế!")
-                    if st.button(f"🚀 Gọi xe tải Chặng Dài ({order['ID']})"):
-                        order["Trạng thái"] = "Chờ xe chặng dài"
-                        st.rerun()
+                # Hiển thị QR cọc ngay lập tức
+                my_pending_deposits = [o for o in st.session_state.orders if o["Nhà_Máy_Owner"] == st.session_state.username and o["Trạng thái"] == "Chờ quét QR Cọc"]
+                if my_pending_deposits:
+                    st.markdown("---")
+                    st.subheader("📲 Mã QR Thanh Toán Đặt Cọc")
+                    for order in my_pending_deposits:
+                        with st.container(border=True):
+                            col_qr, col_info = st.columns([1, 2])
+                            with col_qr: 
+                                st.image("https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg", width=150)
+                            with col_info:
+                                st.write(f"**Mã đơn hàng:** {order['ID']}")
+                                st.write(f"**Số tiền cọc (30%):** <span style='color:#d32f2f; font-size:20px; font-weight:bold;'>{order['Tiền_Cọc']:,.0f} VNĐ</span>", unsafe_allow_html=True)
+                                if st.button(f"✅ Mô phỏng: Đã thanh toán xong ({order['ID']})"):
+                                    order["Trạng thái"] = "Sẵn sàng cho Đại lý"
+                                    st.rerun()
 
-    # =====================================================
-    # VAI TRÒ: NÔNG DÂN
-    # =====================================================
-    elif role == "🌾 Nông dân":
-        st.header("Tin Nhắn Thu Mua Từ Đại Lý")
-        broadcasted_orders = [o for o in st.session_state.orders if o.get("Broadcast_Zalo") == True and o["Trạng thái"] == "Đại lý đang gom"]
-        for order in broadcasted_orders:
-            st.markdown(f"<div class='farmer-card'><h4>🔔 Đại lý đang cần gấp {order['Sản phẩm']}</h4></div>", unsafe_allow_html=True)
-            with st.form(f"form_farmer_{order['ID']}"):
-                f_name = st.text_input("Tên của bạn", st.session_state.username)
-                f_address = st.text_input("Địa chỉ ruộng", "Xã Vĩnh Bình")
-                f_weight = st.number_input("Nhập số lượng rơm (Tấn):", min_value=0.1, value=5.0, step=0.5, format="%.1f")
-                f_method = st.radio("Phương thức giao nhận:", ["Đại lý lại gom", "Tôi tự chở lại Hub"])
-                if st.form_submit_button("Xác nhận Bán"):
-                    initial_status = "Chờ Đại lý xác nhận gom" if "Đại lý lại gom" in f_method else "Nông dân tự giao"
-                    st.session_state.farmer_offers.append({
-                        "ID": f"FM{random.randint(1000,9999)}", "Order_ID": order["ID"],
-                        "Tên": f_name, "Địa chỉ": f_address, "Khối lượng": f_weight,
-                        "Phương thức": f_method, "Trạng thái": initial_status
-                    })
-                    st.success("Đã gửi yêu cầu thành công!")
-
-    # =====================================================
-    # VAI TRÒ: TÀI XẾ CHẶNG NGẮN & DÀI
-    # =====================================================
-    elif role == "🚜 Tài xế (Chặng ngắn)":
-        st.subheader("Trạm Nhận Cuốc (Zalo Mini App)")
-        is_active = st.toggle("🟢 Bật nhận cuốc (Online)", value=True)
-        if is_active:
-            short_haul_trips = [f for f in st.session_state.farmer_offers if f["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]]
-            for trip in short_haul_trips:
-                st.markdown(f"<div class='driver-card'><h4>📍 Gom {trip['Khối lượng']} Tấn Rơm tại {trip['Tên']}</h4></div>", unsafe_allow_html=True)
-                if trip["Trạng thái"] == "Chờ Tài xế chặng ngắn":
-                    if st.button(f"✅ Nhận cuốc ({trip['ID']})"):
-                        trip["Trạng thái"] = "Tài xế đang đi gom"
-                        st.rerun()
-                elif trip["Trạng thái"] == "Tài xế đang đi gom":
-                    if st.button(f"🏁 Đã hạ tải tại Hub ({trip['ID']})"):
-                        trip["Trạng thái"] = "Đã nhập kho"
-                        for o in st.session_state.orders:
-                            if o["ID"] == trip["Order_ID"]:
-                                o["Đã_Gom"] += trip["Khối lượng"]
-                                o["Chi_Phi_Chặng_Ngắn"] += (trip["Khối lượng"] * cfg["shipping_short_per_ton"])
-                        st.rerun()
-
-    elif role == "🚛 Tài xế (Chặng dài)":
-        st.subheader("Sàn Vận Tải Chặng Dài (Middle-Mile)")
-        truck_profile = st.selectbox("Hồ sơ xe của bạn:", ["🥇 Xe tải rỗng chiều về (Giảm 20% cước)", "🥈 Xe đối tác 3PL (Giá chuẩn)"])
-        long_haul_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ xe chặng dài"]
-        for order in long_haul_orders:
-            with st.container(border=True):
-                st.write(f"📦 **Đơn hàng {order['ID']}** - {order['Khối lượng']} Tấn về {order['Nhà máy']}")
-                if st.button(f"🚛 Nhận chuyến giao hàng ({order['ID']})"):
-                    order["Trạng thái"] = "Đang giao đến Nhà máy"
-                    order["Loại_Xe"] = truck_profile.split(" ")[1]
-                    multiplier = 0.8 if "rỗng" in truck_profile else 1.0
-                    order["Chi_Phi_Chặng_Dài"] = order["Khối lượng"] * cfg["shipping_long_per_ton"] * multiplier
-                    st.rerun()
-
-    # =====================================================
-    # VAI TRÒ: ADMIN - BỘ CÔNG THƯƠNG & BÁO CÁO TỔNG TÀI
-    # =====================================================
-    elif role == "👑 Admin":
-        st.header("Trạm Điều Hành Trung Tâm AgriLoop")
-        tab1, tab2, tab3 = st.tabs(["📊 Tổng quan & Báo cáo ESG", "⚙️ Cấu hình Hệ thống", "🛠️ Sổ cái & Quản lý"])
-        
-        with tab1:
-            # 1. Các chỉ số Tài chính cốt lõi
-            completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
-            total_revenue = sum(o.get("Tổng_Thực_Tế", 0) for o in completed_orders)
-            total_platform_fee = sum(o.get("Phí_Sàn_Thực_Tế", 0) for o in completed_orders)
-            total_risk_fund = sum(o.get("Quỹ_Rủi_Ro", 0) for o in completed_orders)
-            
-            # Tính chỉ số Môi trường (ESG) - 1 Tấn rơm không đốt = giảm ~1.4 tấn CO2
-            total_volume = sum(o.get("Khối lượng", 0) for o in completed_orders)
-            co2_saved = total_volume * 1.4 
-            
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Doanh thu GMV", f"{total_revenue / 1000000:,.1f} Tr")
-            col2.metric("Lợi nhuận Sàn", f"{total_platform_fee / 1000000:,.1f} Tr", "+12%")
-            col3.metric("🏦 Quỹ Rủi Ro Escrow", f"{total_risk_fund / 1000:,.0f} K")
-            col4.metric("🌱 C02 Giảm thiểu", f"{co2_saved:,.1f} Tấn", "Tiêu chuẩn ESG")
-
-            st.markdown("---")
-            col_chart1, col_chart2 = st.columns(2)
-            
-            # 2. Biểu đồ phễu trạng thái đơn hàng
-            with col_chart1:
-                st.subheader("Trạng thái các Đơn hàng")
-                if st.session_state.orders:
-                    df_all = pd.DataFrame(st.session_state.orders)
-                    status_counts = df_all['Trạng thái'].value_counts()
-                    st.bar_chart(status_counts, color="#ff9800")
-                else:
-                    st.info("Chưa có dữ liệu.")
-            
-            # 3. Biểu đồ tỷ trọng Sản phẩm
-            with col_chart2:
-                st.subheader("Sản lượng theo Phụ phẩm")
-                if completed_orders:
-                    df_chart = pd.DataFrame(completed_orders)
-                    product_data = df_chart.groupby("Sản phẩm")["Khối lượng"].sum()
-                    st.bar_chart(product_data, color="#2e7d32")
-                else:
-                    st.info("Chưa có giao dịch hoàn tất.")
+            with tab_track:
+                st.header("Trạng Thái Đơn Hàng Liên Tục")
+                my_active_orders = [o for o in st.session_state.orders if o["Nhà_Máy_Owner"] == st.session_state.username and o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Cọc", "Đã hủy bởi Admin"]]
+                
+                if not my_active_orders:
+                    st.info("Hiện không có đơn hàng nào đang trong quá trình vận chuyển/thu gom.")
                     
+                for order in my_active_orders:
+                    with st.expander(f"📦 Đơn {order['ID']} - {order['Khối lượng']} Tấn {order['Sản phẩm']} | Trạng thái: {order['Trạng thái']}", expanded=True):
+                                    
+                        if order["Trạng thái"] in ["Sẵn sàng cho Đại lý", "Đại lý đang gom", "Chờ xe chặng dài"]:
+                            st.info("🔄 Hệ thống đang xử lý và thu gom nguyên liệu tại địa phương.")
+                            progress = 0
+                            if order["Trạng thái"] == "Sẵn sàng cho Đại lý": progress = 20
+                            elif order["Trạng thái"] == "Đại lý đang gom": progress = 50
+                            elif order["Trạng thái"] == "Chờ xe chặng dài": progress = 80
+                            st.progress(progress / 100.0, text=f"Tiến độ tổng thể: {progress}%")
+                        
+                        elif order["Trạng thái"] == "Đang giao đến Nhà máy":
+                            col_map, col_bill = st.columns([1.2, 1])
+                            with col_map:
+                                st.markdown("### 📍 Live Tracking (Bản đồ xe chạy)")
+                                map_data = pd.DataFrame({'lat': [9.7150 + random.uniform(-0.01, 0.01)], 'lon': [105.8150 + random.uniform(-0.01, 0.01)]})
+                                st.map(map_data, zoom=10)
+                                st.caption(f"Đang di chuyển từ Hub {order['Hub_Location']} đến nhà máy của bạn.")
+                                
+                            with col_bill:
+                                st.markdown("### 📊 Quyết Toán Thực Tế")
+                                actual_shipping = order['Chi_Phi_Chặng_Ngắn'] + order['Chi_Phi_Chặng_Dài']
+                                actual_subtotal = order['Chi_Phi_Rơm'] + actual_shipping
+                                actual_total = actual_subtotal + (actual_subtotal * cfg["platform_fee_rate"])
+                                
+                                st.write(f"- Tiền rơm: **{order['Chi_Phi_Rơm']:,.0f} đ**")
+                                st.write(f"- Vận chuyển thực tế: **{actual_shipping:,.0f} đ**")
+                                st.write(f"- **TỔNG THỰC TẾ: <span style='color:#1976d2;'>{actual_total:,.0f} đ</span>**", unsafe_allow_html=True)
+                                
+                                if st.button(f"✅ ĐÃ NHẬN HÀNG ({order['ID']})", use_container_width=True):
+                                    order["Trạng thái"] = "Hoàn tất"
+                                    order["Tổng_Thực_Tế"] = actual_total
+                                    order["Phí_Sàn_Thực_Tế"] = actual_subtotal * cfg["platform_fee_rate"]
+                                    order["Quỹ_Rủi_Ro"] = actual_total * cfg["risk_fund_rate"]
+                                    st.session_state.agent_points += 100 
+                                    st.success("Giao dịch hoàn tất! Hóa đơn điện tử đã được chuyển vào mục 'Lịch sử giao dịch'.")
+                                    st.rerun()
+
+        # ----------------- ĐẠI LÝ -----------------
+        elif role == "🏪 Đại lý (Hub)":
+            st.header(f"Chợ Lệnh Thu Mua")
+            available_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Sẵn sàng cho Đại lý"]
+            for order in available_orders:
+                with st.container(border=True):
+                    col_a, col_b = st.columns([3, 1])
+                    with col_a:
+                        st.write(f"🏭 **{order['Nhà máy']}** cần **{order['Khối lượng']} Tấn {order['Sản phẩm']}**")
+                    with col_b:
+                        if st.button(f"Nhận thầu (+20đ) | {order['ID']}"):
+                            order["Trạng thái"] = "Đại lý đang gom"
+                            order["Hub_Location"] = st.session_state.agent_address
+                            st.session_state.agent_points += 20
+                            st.rerun()
+
             st.markdown("---")
-            # 4. Bản đồ Mạng lưới Logistics ĐBSCL
-            st.subheader("📍 Bản đồ Mạng lưới Hub AgriLoop")
-            st.caption("Mô phỏng vị trí các Hub Đại lý đang hoạt động tại Đồng bằng sông Cửu Long")
-            map_hubs = pd.DataFrame({
-                'lat': [9.6000, 9.2941, 10.0451, 9.7803], # Sóc Trăng, Bạc Liêu, Cần Thơ, Hậu Giang
-                'lon': [105.9750, 105.7278, 105.7468, 105.4746]
-            })
-            st.map(map_hubs, zoom=7)
+            st.header("Trung Tâm Thu Gom")
+            active_orders = [o for o in st.session_state.orders if o["Trạng thái"] in ["Đại lý đang gom", "Chờ xe chặng dài"] and o.get("Hub_Location") == st.session_state.agent_address]
+            for order in active_orders:
+                st.subheader(f"📦 Đơn {order['ID']} - {order['Nhà máy']}")
+                progress_pct = min(order['Đã_Gom'] / order['Khối lượng'], 1.0)
+                st.progress(progress_pct, text=f"Đã gom {order['Đã_Gom']}/{order['Khối lượng']} Tấn")
+                
+                if order["Trạng thái"] == "Đại lý đang gom":
+                    if st.button(f"📢 Phát tín hiệu tìm rơm qua Zalo ({order['ID']})"):
+                        order["Broadcast_Zalo"] = True
+                        st.toast("Đã gửi tin nhắn Zalo hàng loạt!")
+                        
+                    offers = [f for f in st.session_state.farmer_offers if f["Order_ID"] == order["ID"]]
+                    for offer in offers:
+                        with st.container(border=True):
+                            st.write(f"🧑‍🌾 **{offer['Tên']}** - Cung cấp: **{offer['Khối lượng']} Tấn**")
+                            if offer["Trạng thái"] == "Nông dân tự giao":
+                                if st.button(f"👉 Xác nhận đã nhập kho ({offer['ID']})"):
+                                    offer["Trạng thái"] = "Đã nhập kho"
+                                    order["Đã_Gom"] += offer["Khối lượng"]
+                                    st.rerun()
+                            elif offer["Trạng thái"] == "Chờ Đại lý xác nhận gom":
+                                if st.button(f"📡 Chấp nhận & Gọi xe ba gác ({offer['ID']})"):
+                                    offer["Trạng thái"] = "Chờ Tài xế chặng ngắn"
+                                    st.rerun()
+                            elif offer["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]:
+                                st.info("⏳ Đang điều phối xe chặng ngắn...")
+                            elif offer["Trạng thái"] == "Đã nhập kho":
+                                st.success(f"✅ Đã nhập kho.")
+                    
+                    if order['Đã_Gom'] >= order['Khối lượng']:
+                        st.success("✅ Kho đã đầy - Đã chốt chi phí chặng ngắn thực tế!")
+                        if st.button(f"🚀 Gọi xe tải Chặng Dài ({order['ID']})"):
+                            order["Trạng thái"] = "Chờ xe chặng dài"
+                            st.rerun()
 
-        with tab2:
-            st.subheader("⚙️ Cấu hình Bộ máy định giá & Quản trị rủi ro")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                cfg["price_rom_cuon"] = st.number_input("Giá Rơm cuộn (VNĐ/Tấn)", value=cfg["price_rom_cuon"])
-                cfg["price_rom_roi"] = st.number_input("Giá Rơm rời (VNĐ/Tấn)", value=cfg["price_rom_roi"])
-            with col_b:
-                cfg["shipping_short_per_ton"] = st.number_input("Đơn giá chặng ngắn (VNĐ/Tấn)", value=cfg["shipping_short_per_ton"])
-                cfg["shipping_long_per_ton"] = st.number_input("Đơn giá chặng dài (VNĐ/Tấn)", value=cfg["shipping_long_per_ton"])
-                cfg["platform_fee_rate"] = st.slider("Phí nền tảng (%)", 0.01, 0.15, float(cfg["platform_fee_rate"]), 0.01)
-                cfg["risk_fund_rate"] = st.slider("Quỹ rủi ro - Escrow (%)", 0.0, 0.05, float(cfg["risk_fund_rate"]), 0.005)
+        # ----------------- NÔNG DÂN -----------------
+        elif role == "🌾 Nông dân":
+            st.header("Tin Nhắn Thu Mua Từ Đại Lý")
+            broadcasted_orders = [o for o in st.session_state.orders if o.get("Broadcast_Zalo") == True and o["Trạng thái"] == "Đại lý đang gom"]
+            for order in broadcasted_orders:
+                st.markdown(f"<div class='farmer-card'><h4>🔔 Đại lý đang cần gấp {order['Sản phẩm']}</h4></div>", unsafe_allow_html=True)
+                with st.form(f"form_farmer_{order['ID']}"):
+                    f_name = st.text_input("Tên của bạn", st.session_state.username)
+                    f_address = st.text_input("Địa chỉ ruộng", "Xã Vĩnh Bình")
+                    f_weight = st.number_input("Nhập số lượng rơm (Tấn):", min_value=0.1, value=5.0, step=0.5, format="%.1f")
+                    f_method = st.radio("Phương thức giao nhận:", ["Đại lý lại gom", "Tôi tự chở lại Hub"])
+                    if st.form_submit_button("Xác nhận Bán"):
+                        initial_status = "Chờ Đại lý xác nhận gom" if "Đại lý lại gom" in f_method else "Nông dân tự giao"
+                        st.session_state.farmer_offers.append({
+                            "ID": f"FM{random.randint(1000,9999)}", "Order_ID": order["ID"],
+                            "Tên": f_name, "Nông_Dân_Owner": st.session_state.username, "Địa chỉ": f_address, 
+                            "Khối lượng": f_weight, "Phương thức": f_method, "Trạng thái": initial_status
+                        })
+                        st.success("Đã gửi yêu cầu thành công!")
 
-        with tab3:
-            st.subheader("📜 Sổ Cái (Ledger) & Control Panel")
-            if not st.session_state.orders:
-                st.write("Chưa có đơn hàng nào trên hệ thống.")
+        # ----------------- TÀI XẾ -----------------
+        elif role == "🚜 Tài xế (Chặng ngắn)":
+            st.subheader("Trạm Nhận Cuốc (Zalo Mini App)")
+            is_active = st.toggle("🟢 Bật nhận cuốc (Online)", value=True)
+            if is_active:
+                short_haul_trips = [f for f in st.session_state.farmer_offers if f["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]]
+                for trip in short_haul_trips:
+                    st.markdown(f"<div class='driver-card'><h4>📍 Gom {trip['Khối lượng']} Tấn Rơm tại {trip['Tên']}</h4></div>", unsafe_allow_html=True)
+                    if trip["Trạng thái"] == "Chờ Tài xế chặng ngắn":
+                        if st.button(f"✅ Nhận cuốc ({trip['ID']})"):
+                            trip["Trạng thái"] = "Tài xế đang đi gom"
+                            trip["Tài_Xế_Owner"] = st.session_state.username
+                            st.rerun()
+                    elif trip["Trạng thái"] == "Tài xế đang đi gom" and trip.get("Tài_Xế_Owner") == st.session_state.username:
+                        if st.button(f"🏁 Đã hạ tải tại Hub ({trip['ID']})"):
+                            trip["Trạng thái"] = "Đã nhập kho"
+                            for o in st.session_state.orders:
+                                if o["ID"] == trip["Order_ID"]:
+                                    o["Đã_Gom"] += trip["Khối lượng"]
+                                    o["Chi_Phi_Chặng_Ngắn"] += (trip["Khối lượng"] * cfg["shipping_short_per_ton"])
+                            st.rerun()
+
+        elif role == "🚛 Tài xế (Chặng dài)":
+            st.subheader("Sàn Vận Tải Chặng Dài (Middle-Mile)")
+            truck_profile = st.selectbox("Hồ sơ xe của bạn:", ["🥇 Xe tải rỗng chiều về (Giảm 20% cước)", "🥈 Xe đối tác 3PL (Giá chuẩn)"])
+            long_haul_orders = [o for o in st.session_state.orders if o["Trạng thái"] == "Chờ xe chặng dài"]
+            for order in long_haul_orders:
+                with st.container(border=True):
+                    st.write(f"📦 **Đơn hàng {order['ID']}** - {order['Khối lượng']} Tấn về {order['Nhà máy']}")
+                    if st.button(f"🚛 Nhận chuyến giao hàng ({order['ID']})"):
+                        order["Trạng thái"] = "Đang giao đến Nhà máy"
+                        order["Tài_Xế_Owner"] = st.session_state.username
+                        order["Loại_Xe"] = truck_profile.split(" ")[1]
+                        multiplier = 0.8 if "rỗng" in truck_profile else 1.0
+                        order["Chi_Phi_Chặng_Dài"] = order["Khối lượng"] * cfg["shipping_long_per_ton"] * multiplier
+                        st.rerun()
+
+        # ----------------- ADMIN -----------------
+        elif role == "👑 Admin":
+            st.header("Trạm Điều Hành Trung Tâm AgriLoop")
+            tab1, tab2, tab3 = st.tabs(["📊 Tổng quan & Báo cáo ESG", "⚙️ Cấu hình Hệ thống", "🛠️ Control Panel"])
+            
+            with tab1:
+                completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
+                total_revenue = sum(o.get("Tổng_Thực_Tế", 0) for o in completed_orders)
+                total_platform_fee = sum(o.get("Phí_Sàn_Thực_Tế", 0) for o in completed_orders)
+                total_risk_fund = sum(o.get("Quỹ_Rủi_Ro", 0) for o in completed_orders)
+                total_volume = sum(o.get("Khối lượng", 0) for o in completed_orders)
+                co2_saved = total_volume * 1.4 
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Doanh thu GMV", f"{total_revenue / 1000000:,.1f} Tr")
+                col2.metric("Lợi nhuận Sàn", f"{total_platform_fee / 1000000:,.1f} Tr")
+                col3.metric("🏦 Quỹ Rủi Ro Escrow", f"{total_risk_fund / 1000:,.0f} K")
+                col4.metric("🌱 C02 Giảm thiểu", f"{co2_saved:,.1f} Tấn", "Tiêu chuẩn ESG")
+
+                st.markdown("---")
+                col_chart1, col_chart2 = st.columns(2)
+                with col_chart1:
+                    st.subheader("Trạng thái Đơn hàng")
+                    if st.session_state.orders:
+                        df_all = pd.DataFrame(st.session_state.orders)
+                        st.bar_chart(df_all['Trạng thái'].value_counts(), color="#ff9800")
+                with col_chart2:
+                    st.subheader("Sản lượng Phụ phẩm")
+                    if completed_orders:
+                        df_chart = pd.DataFrame(completed_orders)
+                        st.bar_chart(df_chart.groupby("Sản phẩm")["Khối lượng"].sum(), color="#2e7d32")
+                
+                st.subheader("📍 Bản đồ Mạng lưới Hub AgriLoop")
+                map_hubs = pd.DataFrame({'lat': [9.6000, 9.2941, 10.0451, 9.7803], 'lon': [105.9750, 105.7278, 105.7468, 105.4746]})
+                st.map(map_hubs, zoom=7)
+
+            with tab2:
+                st.subheader("⚙️ Cấu hình Bộ máy định giá & Quản trị rủi ro")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    cfg["price_rom_cuon"] = st.number_input("Giá Rơm cuộn (VNĐ/Tấn)", value=cfg["price_rom_cuon"])
+                    cfg["price_rom_roi"] = st.number_input("Giá Rơm rời (VNĐ/Tấn)", value=cfg["price_rom_roi"])
+                with col_b:
+                    cfg["shipping_short_per_ton"] = st.number_input("Phí chặng ngắn (VNĐ/Tấn)", value=cfg["shipping_short_per_ton"])
+                    cfg["shipping_long_per_ton"] = st.number_input("Phí chặng dài (VNĐ/Tấn)", value=cfg["shipping_long_per_ton"])
+                    cfg["platform_fee_rate"] = st.slider("Phí nền tảng (%)", 0.01, 0.15, float(cfg["platform_fee_rate"]), 0.01)
+                    cfg["risk_fund_rate"] = st.slider("Quỹ rủi ro - Escrow (%)", 0.0, 0.05, float(cfg["risk_fund_rate"]), 0.005)
+
+            with tab3:
+                st.subheader("⚠️ Can thiệp Khẩn cấp")
+                for order in st.session_state.orders:
+                    if order["Trạng thái"] not in ["Hoàn tất", "Đã hủy bởi Admin"]:
+                        with st.expander(f"Mã Lệnh: {order['ID']} | Trạng thái: {order['Trạng thái']}"):
+                            col_btn1, col_btn2 = st.columns(2)
+                            if col_btn1.button("❌ Hủy bỏ đơn hàng này", key=f"cancel_{order['ID']}"):
+                                order["Trạng thái"] = "Đã hủy bởi Admin"
+                                st.session_state.agent_points -= 50
+                                st.rerun()
+                            if col_btn2.button("🔁 Reset trạng thái về 'Sẵn sàng'", key=f"reset_{order['ID']}"):
+                                order["Trạng thái"] = "Sẵn sàng cho Đại lý"
+                                st.session_state.agent_points -= 20
+                                st.rerun()
+
+    # ==================================================================================
+    # TRANG 2: LỊCH SỬ GIAO DỊCH (HISTORY PAGE) - TRANG MỚI HOÀN TOÀN
+    # ==================================================================================
+    elif page_selection == "📜 Lịch sử giao dịch":
+        st.title(f"📜 Lịch sử Giao dịch - {role}")
+        st.markdown("Nơi lưu trữ sổ cái và dữ liệu các giao dịch đã hoàn tất trên hệ thống.")
+        
+        if role == "🏭 Nhà máy":
+            my_history = [o for o in st.session_state.orders if o.get("Nhà_Máy_Owner") == st.session_state.username and o["Trạng thái"] == "Hoàn tất"]
+            
+            if not my_history:
+                st.info("Nhà máy chưa có đơn hàng nào hoàn tất.")
             else:
-                # Bảng dữ liệu Sổ cái
+                total_spent = sum(o.get("Tổng_Thực_Tế", 0) for o in my_history)
+                st.success(f"**Tổng ngân sách đã chi trả qua AgriLoop:** {total_spent:,.0f} VNĐ")
+                
+                # Hiển thị Hóa đơn điện tử ở đây
+                st.subheader("🧾 Kho Hóa Đơn Điện Tử (E-Invoice)")
+                for order in my_history:
+                    with st.expander(f"Hóa đơn số #{order['ID']} - Ngày: {order['Deadline']}", expanded=False):
+                        final_payment = order.get('Tổng_Thực_Tế', 0) - order.get('Tiền_Cọc', 0)
+                        st.markdown(f"""
+                        <div class="invoice-final">
+                            <div class="watermark">ĐÃ THANH TOÁN</div>
+                            <h3 style="text-align: center; color: #1976d2; margin-bottom: 0;">HÓA ĐƠN ĐIỆN TỬ (GTGT)</h3>
+                            <p style="text-align: center; color: gray;">Đơn vị phát hành: Sàn Giao Dịch AgriLoop</p>
+                            <hr>
+                            <div style="display:flex; justify-content: space-between;">
+                                <div>
+                                    <p><b>Mã giao dịch:</b> {order['ID']}</p>
+                                    <p><b>Đơn vị mua:</b> {order['Nhà máy']}</p>
+                                    <p><b>Đại lý cung cấp:</b> Hub {order['Hub_Location']}</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <p><b>Ngày xuất:</b> {datetime.now().strftime('%d/%m/%Y')}</p>
+                                    <p><b>Loại hàng:</b> {order['Sản phẩm']}</p>
+                                </div>
+                            </div>
+                            <table style="width: 100%; margin-top: 15px; border-collapse: collapse;">
+                                <tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">
+                                    <th style="padding: 8px; text-align: left;">Diễn giải</th>
+                                    <th style="padding: 8px; text-align: right;">Thành tiền (VNĐ)</th>
+                                </tr>
+                                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Tiền hàng ({order['Khối lượng']} Tấn)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order.get('Chi_Phi_Rơm', 0):,.0f}</td></tr>
+                                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển (Ngắn + Dài)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{(order.get('Chi_Phi_Chặng_Ngắn', 0) + order.get('Chi_Phi_Chặng_Dài', 0)):,.0f}</td></tr>
+                                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí dịch vụ nền tảng (Đã gồm thuế)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order.get('Phí_Sàn_Thực_Tế', 0):,.0f}</td></tr>
+                            </table>
+                            <br>
+                            <div style="text-align: right; font-size: 18px;">
+                                <p>Tổng cộng: <b>{order.get('Tổng_Thực_Tế', 0):,.0f} VNĐ</b></p>
+                                <h3 style="color: #2e7d32; margin-top: 5px;">Thanh toán đợt cuối: {final_payment:,.0f} VNĐ</h3>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                st.subheader("Bảng thống kê")
+                df_history = pd.DataFrame(my_history)
+                st.dataframe(df_history[["ID", "Sản phẩm", "Khối lượng", "Tổng_Thực_Tế", "Hub_Location"]], use_container_width=True)
+
+        elif role == "🏪 Đại lý (Hub)":
+            agent_history = [o for o in st.session_state.orders if o.get("Hub_Location") == st.session_state.agent_address and o["Trạng thái"] == "Hoàn tất"]
+            if not agent_history:
+                st.info("Hub của bạn chưa có đơn hàng nào hoàn tất.")
+            else:
+                total_vol = sum(o.get("Khối lượng", 0) for o in agent_history)
+                st.success(f"**Tổng sản lượng Hub đã gom:** {total_vol} Tấn")
+                df_agent = pd.DataFrame(agent_history)
+                st.dataframe(df_agent[["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Tổng_Thực_Tế"]], use_container_width=True)
+
+        elif role == "🌾 Nông dân":
+            farmer_history = [f for f in st.session_state.farmer_offers if f.get("Nông_Dân_Owner") == st.session_state.username and f["Trạng thái"] == "Đã nhập kho"]
+            if not farmer_history:
+                st.info("Bạn chưa xuất bán thành công lô rơm nào.")
+            else:
+                total_sold = sum(f.get("Khối lượng", 0) for f in farmer_history)
+                st.success(f"**Tổng khối lượng rơm đã bán:** {total_sold} Tấn")
+                df_farmer = pd.DataFrame(farmer_history)
+                st.dataframe(df_farmer[["Order_ID", "Khối lượng", "Phương thức", "Trạng thái"]], use_container_width=True)
+
+        elif role in ["🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)"]:
+            st.info("Chức năng sao kê thu nhập của Tài xế đang được phát triển ở phiên bản kế tiếp.")
+            # Ở bản MVP demo này, tài xế xem tạm thông báo toast là được.
+
+        elif role == "👑 Admin":
+            st.subheader("Sổ Cái Kế Toán (Master Ledger)")
+            if not st.session_state.orders:
+                st.write("Chưa có giao dịch nào trên hệ thống.")
+            else:
                 df_ledger = pd.DataFrame(st.session_state.orders)
-                cols = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái"]
-                existing_cols = [c for c in cols if c in df_ledger.columns]
+                cols_to_show = ["ID", "Nhà máy", "Sản phẩm", "Khối lượng", "Trạng thái", "Tổng_Thực_Tế", "Phí_Sàn_Thực_Tế"]
+                existing_cols = [c for c in cols_to_show if c in df_ledger.columns]
                 st.dataframe(df_ledger[existing_cols], use_container_width=True)
                 
-                st.markdown("### ⚠️ Can thiệp Khẩn cấp")
-                for order in st.session_state.orders:
-                    with st.expander(f"Mã Lệnh: {order['ID']} | Trạng thái: {order['Trạng thái']}"):
-                        col_btn1, col_btn2 = st.columns(2)
-                        if col_btn1.button("❌ Hủy bỏ đơn hàng này", key=f"cancel_{order['ID']}"):
-                            order["Trạng thái"] = "Đã hủy bởi Admin"
-                            st.session_state.agent_points -= 50 # Phạt nặng
-                            st.rerun()
-                        if col_btn2.button("🔁 Reset trạng thái về 'Sẵn sàng'", key=f"reset_{order['ID']}"):
-                            order["Trạng thái"] = "Sẵn sàng cho Đại lý"
-                            st.session_state.agent_points -= 20 # Phạt nhẹ
-                            st.rerun()
+                st.download_button(
+                    label="📥 Xuất dữ liệu Sổ cái (CSV)",
+                    data=df_ledger.to_csv(index=False).encode('utf-8'),
+                    file_name='Agriloop_Ledger.csv',
+                    mime='text/csv',
+                )
