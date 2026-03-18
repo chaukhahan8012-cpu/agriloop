@@ -72,17 +72,20 @@ if not st.session_state.is_logged_in:
             <p style="text-align: center; color: gray;">Đăng ký & Thiết lập tài khoản người dùng</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        # ĐƯA SELECTBOX RA NGOÀI FORM ĐỂ GIAO DIỆN CẬP NHẬT NGAY LẬP TỨC
+        role_select = st.selectbox("Chọn vai trò của bạn để hiển thị thông tin tương ứng:", 
+            ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)", "🚛 Tài xế (Chặng dài - Xe tải)", "👑 Admin"]
+        )
+        
         with st.form("login_form"):
             username = st.text_input("Tên đăng nhập / Họ và tên (*)", placeholder="VD: Nguyễn Văn A hoặc Công ty ABC")
             password = st.text_input("Mật khẩu (*)", type="password")
-            role_select = st.selectbox("Chọn vai trò của bạn:", 
-                ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)", "🚛 Tài xế (Chặng dài - Xe tải)", "👑 Admin"]
-            )
             
             st.markdown("---")
             st.markdown("#### Thông tin bổ sung (Theo yêu cầu hệ thống)")
             
-            # Khởi tạo các biến để tránh lỗi UnboundLocalError
+            # Khởi tạo các biến để tránh lỗi
             mst = email = rep = phone = address = agent_loc = plate = v_type = capacity = ""
             
             if role_select == "🏭 Nhà máy/Doanh nghiệp":
@@ -122,7 +125,6 @@ if not st.session_state.is_logged_in:
                         "plate": plate, "v_type": v_type, "capacity": capacity
                     }
                     st.rerun()
-
 # =====================================================
 # GIAO DIỆN CHÍNH
 # =====================================================
