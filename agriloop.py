@@ -217,7 +217,7 @@ else:
                                 order["Trạng thái"] = "Sẵn sàng cho Đại lý"
                                 st.rerun()
 
-        with tab_track:
+       with tab_track:
             st.header("Kiểm soát chất lượng & Thanh toán")
             active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Phí cam kết", "Đã hủy bởi Admin"]]
             
@@ -250,20 +250,27 @@ else:
                             actual_shipping = order['Chi_Phi_Chặng_Ngắn'] + order['Chi_Phi_Chặng_Dài']
                             actual_subtotal = order['Chi_Phi_Rơm'] + actual_shipping
                             
-                            fee_tx = actual_subtotal * cfg["fee_transaction"]
+                            # Tính các loại phí
+                            fee_tx_base = actual_subtotal * cfg["fee_transaction"]
+                            # LOGIC MỚI: Khấu trừ phí cam kết trực tiếp vào phí sàn
+                            fee_tx_final = max(0, fee_tx_base - order['Phí_Cam_Kết']) 
+                            
                             fee_log = order['Chi_Phi_Chặng_Dài'] * cfg["fee_logistics"]
                             fee_qa = actual_subtotal * cfg["fee_qa"]
-                            actual_total = actual_subtotal + fee_tx + fee_log + fee_qa
+                            
+                            actual_total = actual_subtotal + fee_tx_base + fee_log + fee_qa
+                            final_payment = actual_total - order['Phí_Cam_Kết']
                             
                             st.write(f"- Tiền rơm: **{order['Chi_Phi_Rơm']:,.0f} đ**")
                             st.write(f"- Vận chuyển thực tế: **{actual_shipping:,.0f} đ**")
-                            st.write(f"- Các loại phí (Sàn, Điều phối, QA): **{(fee_tx+fee_log+fee_qa):,.0f} đ**")
-                            st.write(f"- **TỔNG ĐỐI SOÁT: <span style='color:#1976d2;'>{actual_total:,.0f} đ</span>**", unsafe_allow_html=True)
+                            st.write(f"- Phí sàn (Đã khấu trừ {order['Phí_Cam_Kết']:,.0f}đ tiền cam kết): **{fee_tx_final:,.0f} đ**")
+                            st.write(f"- Các phí khác (Điều phối, QA): **{(fee_log+fee_qa):,.0f} đ**")
+                            st.write(f"- **TỔNG CÒN PHẢI THANH TOÁN: <span style='color:#1976d2;'>{final_payment:,.0f} đ</span>**", unsafe_allow_html=True)
                             
                             if st.button(f"✅ KIỂM TRA ĐẠT - XÁC NHẬN THANH TOÁN ({order['ID']})", use_container_width=True):
                                 order["Trạng thái"] = "Hoàn tất"
                                 order["Tổng_Thực_Tế"] = actual_total
-                                order["Chi_Tiet_Phi"] = {"Fee_Tx": fee_tx, "Fee_Log": fee_log, "Fee_QA": fee_qa}
+                                order["Chi_Tiet_Phi"] = {"Fee_Tx_Base": fee_tx_base, "Fee_Tx_Final": fee_tx_final, "Fee_Log": fee_log, "Fee_QA": fee_qa}
                                 st.session_state.agent_points += 10
                                 st.rerun()
 
@@ -277,7 +284,7 @@ else:
             for order in factory_history:
                 with st.expander(f"🧾 Chứng từ giao dịch #{order['ID']}", expanded=False):
                     final_payment = order['Tổng_Thực_Tế'] - order['Phí_Cam_Kết']
-                    fees = order.get("Chi_Tiet_Phi", {"Fee_Tx": 0, "Fee_Log": 0, "Fee_QA": 0})
+                    fees = order.get("Chi_Tiet_Phi", {"Fee_Tx_Base": 0, "Fee_Tx_Final": 0, "Fee_Log": 0, "Fee_QA": 0})
                     st.markdown(f"""
                     <div class="invoice-final">
                         <div class="watermark">ĐÃ THANH TOÁN</div>
@@ -303,19 +310,20 @@ else:
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Giá trị nguyên liệu ({order['Khối lượng']} Tấn)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Rơm']:,.0f}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng ngắn</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Ngắn']:,.0f}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng dài</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Dài']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí sàn giao dịch ({cfg['fee_transaction']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_Tx']:,.0f}</td></tr>
+                            
+                            <tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: gray;">Phí sàn giao dịch ({cfg['fee_transaction']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: gray;">{fees['Fee_Tx_Base']:,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>Khấu trừ Phí cam kết ban đầu (2%)</i></td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>-{order['Phí_Cam_Kết']:,.0f}</i></td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Phí sàn thực tế phải thu</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; font-weight: bold;">{fees['Fee_Tx_Final']:,.0f}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí điều phối Logistics ({cfg['fee_logistics']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_Log']:,.0f}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí đảm bảo chất lượng ({cfg['fee_qa']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_QA']:,.0f}</td></tr>
                         </table>
                         <br>
                         <div style="text-align: right; font-size: 18px;">
-                            <p>Tổng cộng: <b>{order['Tổng_Thực_Tế']:,.0f} VNĐ</b></p>
-                            <p style="color: gray; font-size: 14px;">Trừ Phí cam kết đã nộp: -{order['Phí_Cam_Kết']:,.0f} VNĐ</p>
+                            <p style="color: gray; font-size: 14px;">Tổng giá trị giao dịch: {order['Tổng_Thực_Tế']:,.0f} VNĐ</p>
                             <h3 style="color: #2e7d32; margin-top: 5px;">Thanh toán đợt cuối: {final_payment:,.0f} VNĐ</h3>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-
     # =====================================================
     # VAI TRÒ: ĐẠI LÝ (HUB THU GOM)
     # =====================================================
