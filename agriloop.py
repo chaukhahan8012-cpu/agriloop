@@ -60,7 +60,7 @@ def logout():
     st.session_state.user_profile = {}
 
 # =====================================================
-# MÀN HÌNH ĐĂNG NHẬP & THIẾT LẬP TÀI KHOẢN (BƯỚC 1)
+# MÀN HÌNH ĐĂNG NHẬP & THIẾT LẬP TÀI KHOẢN
 # =====================================================
 if not st.session_state.is_logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -73,7 +73,7 @@ if not st.session_state.is_logged_in:
         </div>
         """, unsafe_allow_html=True)
         
-        # ĐƯA SELECTBOX RA NGOÀI FORM ĐỂ GIAO DIỆN CẬP NHẬT NGAY LẬP TỨC
+        # Đưa selectbox ra ngoài form để giao diện cập nhật ngay lập tức
         role_select = st.selectbox("Chọn vai trò của bạn để hiển thị thông tin tương ứng:", 
             ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)", "🚛 Tài xế (Chặng dài - Xe tải)", "👑 Admin"]
         )
@@ -125,6 +125,7 @@ if not st.session_state.is_logged_in:
                         "plate": plate, "v_type": v_type, "capacity": capacity
                     }
                     st.rerun()
+
 # =====================================================
 # GIAO DIỆN CHÍNH
 # =====================================================
@@ -217,7 +218,7 @@ else:
                                 order["Trạng thái"] = "Sẵn sàng cho Đại lý"
                                 st.rerun()
 
-       with tab_track:
+        with tab_track:
             st.header("Kiểm soát chất lượng & Thanh toán")
             active_factory_orders = [o for o in st.session_state.orders if o["Trạng thái"] not in ["Hoàn tất", "Chờ quét QR Phí cam kết", "Đã hủy bởi Admin"]]
             
@@ -252,7 +253,7 @@ else:
                             
                             # Tính các loại phí
                             fee_tx_base = actual_subtotal * cfg["fee_transaction"]
-                            # LOGIC MỚI: Khấu trừ phí cam kết trực tiếp vào phí sàn
+                            # Khấu trừ phí cam kết trực tiếp vào phí sàn
                             fee_tx_final = max(0, fee_tx_base - order['Phí_Cam_Kết']) 
                             
                             fee_log = order['Chi_Phi_Chặng_Dài'] * cfg["fee_logistics"]
@@ -314,6 +315,7 @@ else:
                             <tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: gray;">Phí sàn giao dịch ({cfg['fee_transaction']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: gray;">{fees['Fee_Tx_Base']:,.0f}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>Khấu trừ Phí cam kết ban đầu (2%)</i></td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>-{order['Phí_Cam_Kết']:,.0f}</i></td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Phí sàn thực tế phải thu</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; font-weight: bold;">{fees['Fee_Tx_Final']:,.0f}</td></tr>
+                            
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí điều phối Logistics ({cfg['fee_logistics']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_Log']:,.0f}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí đảm bảo chất lượng ({cfg['fee_qa']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_QA']:,.0f}</td></tr>
                         </table>
@@ -324,6 +326,7 @@ else:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+
     # =====================================================
     # VAI TRÒ: ĐẠI LÝ (HUB THU GOM)
     # =====================================================
@@ -388,7 +391,7 @@ else:
                     order["Trạng thái"] = "Chờ xe chặng dài"
                     st.rerun()
 
-   # =====================================================
+    # =====================================================
     # VAI TRÒ: NÔNG DÂN
     # =====================================================
     elif role == "🌾 Nông dân":
@@ -410,15 +413,14 @@ else:
                 f_method = st.radio("Hình thức giao nhận:", ["Đại lý lại gom", "Tôi tự chở lại kho bãi (Hub)"])
                 
                 if st.form_submit_button("Xác nhận Bán"):
-                    # SỬA LỖI TẠI ĐÂY: Nếu chọn 'Đại lý lại gom' -> Đẩy thẳng trạng thái cho Tài xế chặng ngắn!
                     initial_status = "Chờ Tài xế chặng ngắn" if "Đại lý lại gom" in f_method else "Nông dân tự giao"
-                    
                     st.session_state.farmer_offers.append({
                         "ID": f"FM{random.randint(1000,9999)}", "Order_ID": order["ID"],
                         "Tên": f_name, "SĐT": f_phone, "Địa chỉ": f_address, "Khối lượng": f_weight,
                         "Phương thức": f_method, "Trạng thái": initial_status
                     })
                     st.success("Đã ghi nhận đơn hàng! Hệ thống đang tự động điều phối xe đến ruộng của bạn.")
+
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG NGẮN
     # =====================================================
@@ -477,15 +479,17 @@ else:
     # =====================================================
     elif role == "👑 Admin":
         st.header("Bảng Điều Khiển Trung Tâm AgriLoop")
-        # Giữ nguyên phần Dashboard giống version trước
         tab1, tab2, tab3 = st.tabs(["📊 Tổng quan Kinh doanh & Môi trường", "⚙️ Cấu hình Dòng tiền", "🛠️ Sổ cái (Ledger)"])
         
         with tab1:
             completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
             total_gmv = sum(o.get("Tổng_Thực_Tế", 0) for o in completed_orders)
-            total_fee_tx = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_Tx", 0) for o in completed_orders)
+            
+            # Fix lỗi lấy nhầm biến cho biểu đồ của Admin
+            total_fee_tx = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_Tx_Base", 0) for o in completed_orders)
             total_fee_log = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_Log", 0) for o in completed_orders)
             total_fee_qa = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_QA", 0) for o in completed_orders)
+            
             total_volume = sum(o.get("Khối lượng", 0) for o in completed_orders)
             co2_saved = total_volume * 1.25 
             
