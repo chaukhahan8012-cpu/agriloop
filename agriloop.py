@@ -69,7 +69,7 @@ if not st.session_state.is_logged_in:
         st.markdown("""
         <div class="login-container">
             <h2 style="text-align: center; color: #2e7d32;">🌾 AgriLoop MVP</h2>
-            <p style="text-align: center; color: gray;">Đăng ký & Thiết lập tài khoản người dùng</p>
+           <p style="text-align: center; color: gray;">Nền tảng logistics số kết nối chuỗi cung ứng phụ phẩm nông nghiệp</p>
         </div>
         """, unsafe_allow_html=True)
         
