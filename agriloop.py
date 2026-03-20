@@ -276,7 +276,7 @@ else:
                                 st.rerun()
 
         with tab_history:
-            st.header("Chứng từ đối soát điện ")
+            st.header("Chứng từ đối soát điện tử")
             factory_history = [o for o in st.session_state.orders if o["Trạng thái"] == "Hoàn tất"]
             
             if not factory_history:
