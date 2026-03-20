@@ -431,7 +431,7 @@ else:
     # =====================================================
     # FIX LỖI TẠI ĐÂY: Đã đồng bộ tên vai trò chính xác
     elif role == "🚜 Tài xế (Chặng ngắn)":
-        st.subheader("Cuốc Xe Nội Vùng (< 20km)")
+        st.subheader("Cuốc Xe Nội Vùng (< 15km)")
         is_active = st.toggle("🟢 Sẵn sàng nhận chuyến (Online)", value=True)
         if is_active:
             short_haul_trips = [f for f in st.session_state.farmer_offers if f["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]]
