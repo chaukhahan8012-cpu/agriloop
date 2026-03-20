@@ -75,7 +75,7 @@ if not st.session_state.is_logged_in:
         
         # Đưa selectbox ra ngoài form để giao diện cập nhật ngay lập tức
         role_select = st.selectbox("Chọn vai trò của bạn để hiển thị thông tin tương ứng:", 
-            ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)", "🚛 Tài xế (Chặng dài - Xe tải)", "👑 Admin"]
+            ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)", "👑 Admin"]
         )
         
         with st.form("login_form"):
