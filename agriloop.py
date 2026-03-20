@@ -156,7 +156,7 @@ else:
     # VAI TRÒ: NHÀ MÁY / DOANH NGHIỆP
     # =====================================================
     if role == "🏭 Nhà máy/Doanh nghiệp":
-        tab_buy, tab_track, tab_history = st.tabs(["🛒 Khởi tạo Lệnh thu mua", "📍 Theo dõi & Đối soát", "🧾 Hóa đơn Điện tử"])
+        tab_buy, tab_track, tab_history = st.tabs(["🛒 Khởi tạo Lệnh thu mua", "📍 Theo dõi & Đối soát", "🧾 Chứng từ đối soát điện tử"])
         
         with tab_buy:
             st.header("Khởi tạo Lệnh Thu Mua")
@@ -276,7 +276,7 @@ else:
                                 st.rerun()
 
         with tab_history:
-            st.header("Hóa Đơn Điện Tử (E-Invoice)")
+            st.header("Chứng từ đối soát điện ")
             factory_history = [o for o in st.session_state.orders if o["Trạng thái"] == "Hoàn tất"]
             
             if not factory_history:
