@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 from datetime import datetime
+import textwrap
 
 st.set_page_config(page_title="AgriLoop - Nền tảng Logistics Nông nghiệp", layout="wide", page_icon="🌾")
 
@@ -71,23 +72,24 @@ if not st.session_state.is_logged_in:
             <h2 style="text-align: center; color: #2e7d32;">🌾 AgriLoop</h2>
             <p style="text-align: center; color: gray;">Nông nghiệp tuần hoàn, kiến tạo giá trị xanh</p>
         </div>
+        <br>
         """, unsafe_allow_html=True)
         
-        # Đưa selectbox ra ngoài form để giao diện cập nhật ngay lập tức
-        role_select = st.selectbox("Chọn vai trò của bạn để hiển thị thông tin tương ứng:", 
-            ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)", "👑 Admin"]
-        )
-        
-        with st.form("login_form"):
+        # BỎ st.form ĐỂ UI CẬP NHẬT TỨC THÌ
+        with st.container(border=True):
+            role_select = st.selectbox("Chọn vai trò của bạn:", 
+                ["🏭 Nhà máy/Doanh nghiệp", "🏪 Đại lý (Hub thu gom)", "🌾 Nông dân", "🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)", "👑 Admin"]
+            )
+            
             username = st.text_input("Tên đăng nhập / Họ và tên (*)", placeholder="VD: Nguyễn Văn A hoặc Công ty ABC")
             password = st.text_input("Mật khẩu (*)", type="password")
             
             st.markdown("---")
             st.markdown("#### Thông tin bổ sung (Theo yêu cầu hệ thống)")
             
-            # Khởi tạo các biến để tránh lỗi
             mst = email = rep = phone = address = agent_loc = plate = v_type = capacity = ""
             
+            # GIAO DIỆN SẼ NHẢY ĐÚNG THEO TỪNG VAI TRÒ NGAY LẬP TỨC
             if role_select == "🏭 Nhà máy/Doanh nghiệp":
                 col_a, col_b = st.columns(2)
                 mst = col_a.text_input("Mã số thuế (*)")
@@ -104,7 +106,6 @@ if not st.session_state.is_logged_in:
                 agent_loc = st.text_input("📍 Địa chỉ Hub thu gom (*)", placeholder="VD: Tam Nông, Đồng Tháp")
                 phone = st.text_input("Số điện thoại (*)")
                 
-            # FIX LỖI TẠI ĐÂY: Tên vai trò đã được đồng bộ chuẩn xác
             elif role_select in ["🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)"]:
                 address = st.text_input("Địa chỉ đơn vị/cá nhân vận chuyển (*)")
                 col_a, col_b = st.columns(2)
@@ -113,13 +114,12 @@ if not st.session_state.is_logged_in:
                 v_type = col_a.text_input("Loại phương tiện", placeholder="VD: Xe tải mui bạt / Xe ba gác")
                 capacity = col_b.number_input("Trọng tải (Tấn)", min_value=0.5, step=0.5)
             
-            if st.form_submit_button("Hoàn tất Đăng ký & Đăng nhập"):
+            if st.button("Hoàn tất Đăng ký & Đăng nhập", use_container_width=True):
                 if username == "": 
                     st.error("Vui lòng nhập Tên/Tên đăng nhập!")
                 else:
                     st.session_state.is_logged_in = True
                     st.session_state.current_role = role_select
-                    # Lưu toàn bộ profile vào session
                     st.session_state.user_profile = {
                         "username": username,
                         "mst": mst, "email": email, "rep": rep, "phone": phone,
@@ -147,7 +147,6 @@ else:
         st.sidebar.markdown(f"**📍 Hub:** {profile.get('agent_loc', 'Chưa cập nhật')}")
         st.sidebar.markdown(f"**🌟 Hạng Đại lý:** <span style='color:{tier_color}; font-weight:bold;'>{tier_name} ({st.session_state.agent_points} pt)</span>", unsafe_allow_html=True)
     
-    # FIX LỖI TẠI ĐÂY: Đồng bộ tên hiển thị thông tin ở Menu trái
     elif role in ["🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)"]:
         st.sidebar.markdown(f"**🚛 Xe:** {profile.get('v_type', 'N/A')} - {profile.get('capacity', 0)} Tấn")
         st.sidebar.markdown(f"**🏷️ Biển số:** {profile.get('plate', 'N/A')}")
@@ -256,9 +255,7 @@ else:
                             actual_shipping = order['Chi_Phi_Chặng_Ngắn'] + order['Chi_Phi_Chặng_Dài']
                             actual_subtotal = order['Chi_Phi_Rơm'] + actual_shipping
                             
-                            # Tính các loại phí
                             fee_tx_base = actual_subtotal * cfg["fee_transaction"]
-                            # Khấu trừ phí cam kết trực tiếp vào phí sàn
                             fee_tx_final = max(0, fee_tx_base - order['Phí_Cam_Kết']) 
                             
                             fee_log = order['Chi_Phi_Chặng_Dài'] * cfg["fee_logistics"]
@@ -291,46 +288,47 @@ else:
                 with st.expander(f"🧾 Chứng từ giao dịch #{order['ID']}", expanded=False):
                     final_payment = order['Tổng_Thực_Tế'] - order['Phí_Cam_Kết']
                     fees = order.get("Chi_Tiet_Phi", {"Fee_Tx_Base": 0, "Fee_Tx_Final": 0, "Fee_Log": 0, "Fee_QA": 0})
-                    st.markdown(f"""
-                    <div class="invoice-final">
-                        <div class="watermark">ĐÃ THANH TOÁN</div>
-                        <h3 style="text-align: center; color: #1976d2; margin-bottom: 0;">CHỨNG TỪ ĐỐI SOÁT ĐIỆN TỬ</h3>
-                        <p style="text-align: center; color: gray;">Sàn Giao Dịch AgriLoop</p>
-                        <hr>
-                        <div style="display:flex; justify-content: space-between;">
-                            <div>
-                                <p><b>Mã giao dịch:</b> {order['ID']}</p>
-                                <p><b>Đơn vị mua:</b> {order['Nhà máy']} (MST: {order.get('MST', 'N/A')})</p>
-                                <p><b>Đại lý cung cấp:</b> Hub {order['Hub_Location']}</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p><b>Ngày chốt:</b> {datetime.now().strftime('%d/%m/%Y')}</p>
-                                <p><b>Loại hàng:</b> {order['Sản phẩm']}</p>
-                            </div>
-                        </div>
-                        <table style="width: 100%; margin-top: 15px; border-collapse: collapse;">
-                            <tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">
-                                <th style="padding: 8px; text-align: left;">Diễn giải</th>
-                                <th style="padding: 8px; text-align: right;">Thành tiền (VNĐ)</th>
-                            </tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Giá trị nguyên liệu ({order['Khối lượng']} Tấn)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Rơm']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng ngắn</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Ngắn']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng dài</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Dài']:,.0f}</td></tr>
-                            
-                            <tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: gray;">Phí sàn giao dịch ({cfg['fee_transaction']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: gray;">{fees['Fee_Tx_Base']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>Khấu trừ Phí cam kết ban đầu (2%)</i></td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>-{order['Phí_Cam_Kết']:,.0f}</i></td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Phí sàn thực tế phải thu</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; font-weight: bold;">{fees['Fee_Tx_Final']:,.0f}</td></tr>
-                            
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí điều phối Logistics ({cfg['fee_logistics']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_Log']:,.0f}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí đảm bảo chất lượng ({cfg['fee_qa']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_QA']:,.0f}</td></tr>
-                        </table>
-                        <br>
-                        <div style="text-align: right; font-size: 18px;">
-                            <p style="color: gray; font-size: 14px;">Tổng giá trị giao dịch: {order['Tổng_Thực_Tế']:,.0f} VNĐ</p>
-                            <h3 style="color: #2e7d32; margin-top: 5px;">Thanh toán đợt cuối: {final_payment:,.0f} VNĐ</h3>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    
+                    # ĐÃ CĂN LỀ TRÁI TOÀN BỘ HTML ĐỂ TRÁNH LỖI MARKDOWN (Vỡ bảng)
+                    html_content = f"""
+<div class="invoice-final">
+<div class="watermark">ĐÃ THANH TOÁN</div>
+<h3 style="text-align: center; color: #1976d2; margin-bottom: 0;">CHỨNG TỪ ĐỐI SOÁT ĐIỆN TỬ</h3>
+<p style="text-align: center; color: gray;">Sàn Giao Dịch AgriLoop</p>
+<hr>
+<div style="display:flex; justify-content: space-between;">
+<div>
+<p><b>Mã giao dịch:</b> {order['ID']}</p>
+<p><b>Đơn vị mua:</b> {order['Nhà máy']} (MST: {order.get('MST', 'N/A')})</p>
+<p><b>Đại lý cung cấp:</b> Hub {order['Hub_Location']}</p>
+</div>
+<div style="text-align: right;">
+<p><b>Ngày chốt:</b> {datetime.now().strftime('%d/%m/%Y')}</p>
+<p><b>Loại hàng:</b> {order['Sản phẩm']}</p>
+</div>
+</div>
+<table style="width: 100%; margin-top: 15px; border-collapse: collapse;">
+<tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">
+<th style="padding: 8px; text-align: left;">Diễn giải</th>
+<th style="padding: 8px; text-align: right;">Thành tiền (VNĐ)</th>
+</tr>
+<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Giá trị nguyên liệu ({order['Khối lượng']} Tấn)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Rơm']:,.0f}</td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng ngắn</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Ngắn']:,.0f}</td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí vận chuyển chặng dài</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{order['Chi_Phi_Chặng_Dài']:,.0f}</td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: gray;">Phí sàn giao dịch ({cfg['fee_transaction']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: gray;">{fees['Fee_Tx_Base']:,.0f}</td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>Khấu trừ Phí cam kết ban đầu (2%)</i></td><td style="padding: 8px; text-align: right; border-bottom: 1px dashed #ddd; color: #d32f2f;"><i>-{order['Phí_Cam_Kết']:,.0f}</i></td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Phí sàn thực tế phải thu</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; font-weight: bold;">{fees['Fee_Tx_Final']:,.0f}</td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí điều phối Logistics ({cfg['fee_logistics']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_Log']:,.0f}</td></tr>
+<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Phí đảm bảo chất lượng ({cfg['fee_qa']*100}%)</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">{fees['Fee_QA']:,.0f}</td></tr>
+</table>
+<br>
+<div style="text-align: right; font-size: 18px;">
+<p style="color: gray; font-size: 14px;">Tổng giá trị giao dịch: {order['Tổng_Thực_Tế']:,.0f} VNĐ</p>
+<h3 style="color: #2e7d32; margin-top: 5px;">Thanh toán đợt cuối: {final_payment:,.0f} VNĐ</h3>
+</div>
+</div>
+                    """
+                    st.markdown(html_content, unsafe_allow_html=True)
 
     # =====================================================
     # VAI TRÒ: ĐẠI LÝ (HUB THU GOM)
@@ -429,9 +427,8 @@ else:
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG NGẮN
     # =====================================================
-    # FIX LỖI TẠI ĐÂY: Đã đồng bộ tên vai trò chính xác
     elif role == "🚜 Tài xế (Chặng ngắn)":
-        st.subheader("Cuốc Xe Nội Vùng (< 15km)")
+        st.subheader("Cuốc Xe Nội Vùng (< 20km)")
         is_active = st.toggle("🟢 Sẵn sàng nhận chuyến (Online)", value=True)
         if is_active:
             short_haul_trips = [f for f in st.session_state.farmer_offers if f["Trạng thái"] in ["Chờ Tài xế chặng ngắn", "Tài xế đang đi gom"]]
