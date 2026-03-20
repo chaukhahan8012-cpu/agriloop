@@ -68,8 +68,8 @@ if not st.session_state.is_logged_in:
     with col2:
         st.markdown("""
         <div class="login-container">
-            <h2 style="text-align: center; color: #2e7d32;">🌾 AgriLoop MVP</h2>
-            <p style="text-align: center; color: gray;">Đăng ký & Thiết lập tài khoản người dùng</p>
+            <h2 style="text-align: center; color: #2e7d32;">🌾 AgriLoop</h2>
+            <p style="text-align: center; color: gray;">Nông nghiệp tuần hoàn, kiến tạo giá trị xanh</p>
         </div>
         """, unsafe_allow_html=True)
         
