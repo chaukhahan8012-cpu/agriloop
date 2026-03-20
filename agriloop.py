@@ -104,7 +104,9 @@ if not st.session_state.is_logged_in:
                 agent_loc = st.text_input("📍 Địa chỉ Hub thu gom (*)", placeholder="VD: Tam Nông, Đồng Tháp")
                 phone = st.text_input("Số điện thoại (*)")
                 
-            elif role_select in ["🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)", "🚛 Tài xế (Chặng dài - Xe tải)"]:
+            # FIX LỖI TẠI ĐÂY: Tên vai trò đã được đồng bộ chuẩn xác
+            elif role_select in ["🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)"]:
+                address = st.text_input("Địa chỉ đơn vị/cá nhân vận chuyển (*)")
                 col_a, col_b = st.columns(2)
                 phone = col_a.text_input("Số điện thoại (*)")
                 plate = col_b.text_input("Biển số xe (*)", placeholder="VD: 66C-123.45")
@@ -142,11 +144,14 @@ else:
     
     if role == "🏪 Đại lý (Hub thu gom)":
         tier_name, tier_color = get_agent_tier(st.session_state.agent_points)
-        st.sidebar.markdown(f"**📍 Hub:** {profile['agent_loc']}")
+        st.sidebar.markdown(f"**📍 Hub:** {profile.get('agent_loc', 'Chưa cập nhật')}")
         st.sidebar.markdown(f"**🌟 Hạng Đại lý:** <span style='color:{tier_color}; font-weight:bold;'>{tier_name} ({st.session_state.agent_points} pt)</span>", unsafe_allow_html=True)
-    elif role in ["🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)", "🚛 Tài xế (Chặng dài - Xe tải)"]:
-        st.sidebar.markdown(f"**🚛 Xe:** {profile['v_type']} - {profile['capacity']} Tấn")
-        st.sidebar.markdown(f"**🏷️ Biển số:** {profile['plate']}")
+    
+    # FIX LỖI TẠI ĐÂY: Đồng bộ tên hiển thị thông tin ở Menu trái
+    elif role in ["🚜 Tài xế (Chặng ngắn)", "🚛 Tài xế (Chặng dài)"]:
+        st.sidebar.markdown(f"**🚛 Xe:** {profile.get('v_type', 'N/A')} - {profile.get('capacity', 0)} Tấn")
+        st.sidebar.markdown(f"**🏷️ Biển số:** {profile.get('plate', 'N/A')}")
+        st.sidebar.markdown(f"**📍 Địa chỉ:** {profile.get('address', 'N/A')}")
         
     st.sidebar.markdown("---")
     st.sidebar.button("🚪 Đăng xuất", on_click=logout)
@@ -194,8 +199,8 @@ else:
                 if st.form_submit_button("Xác nhận Lệnh & Thanh toán Phí cam kết"):
                     new_id = f"AL{len(st.session_state.orders)+1:03}"
                     st.session_state.orders.append({
-                        "ID": new_id, "Nhà máy": profile["username"], "Địa chỉ": profile["address"],
-                        "MST": profile["mst"], "Đại_diện": profile["rep"],
+                        "ID": new_id, "Nhà máy": profile["username"], "Địa chỉ": profile.get("address", ""),
+                        "MST": profile.get("mst", ""), "Đại_diện": profile.get("rep", ""),
                         "Sản phẩm": product, "Khối lượng": weight, "Deadline": str(deadline),
                         "Trạng thái": "Chờ quét QR Phí cam kết", "Tổng_Dự_Kiến": total_est, "Phí_Cam_Kết": commitment_fee,
                         "Chi_Phi_Rơm": base_cost, "Chi_Phi_Chặng_Ngắn": 0.0, "Chi_Phi_Chặng_Dài": 0.0,
@@ -341,7 +346,7 @@ else:
                 with col_b:
                     if st.button(f"Nhận thầu (+20đ) | {order['ID']}"):
                         order["Trạng thái"] = "Đại lý đang gom"
-                        order["Hub_Location"] = profile['agent_loc']
+                        order["Hub_Location"] = profile.get('agent_loc', 'N/A')
                         st.session_state.agent_points += 20
                         st.rerun()
 
@@ -424,7 +429,8 @@ else:
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG NGẮN
     # =====================================================
-    elif role == "🚜 Tài xế (Chặng ngắn - Ba gác/Máy cày)":
+    # FIX LỖI TẠI ĐÂY: Đã đồng bộ tên vai trò chính xác
+    elif role == "🚜 Tài xế (Chặng ngắn)":
         st.subheader("Cuốc Xe Nội Vùng (< 20km)")
         is_active = st.toggle("🟢 Sẵn sàng nhận chuyến (Online)", value=True)
         if is_active:
@@ -450,7 +456,7 @@ else:
     # =====================================================
     # VAI TRÒ: TÀI XẾ CHẶNG DÀI
     # =====================================================
-    elif role == "🚛 Tài xế (Chặng dài - Xe tải)":
+    elif role == "🚛 Tài xế (Chặng dài)":
         st.subheader("Sàn Giao Dịch Vận Tải (Back-haul Optimization)")
         truck_profile = st.selectbox("Lựa chọn phương thức chạy:", [
             "🥇 Xe rỗng chiều về (Back-haul) - Hệ thống ưu tiên phân bổ", 
@@ -469,7 +475,7 @@ else:
                     order["Trạng thái"] = "Đang giao đến Nhà máy"
                     order["Loại_Xe"] = "Back-haul" if "rỗng" in truck_profile else "Đối tác"
                     if order.get("Dữ_Liệu_IoT"):
-                        order["Dữ_Liệu_IoT"]["Biển_số"] = profile["plate"]
+                        order["Dữ_Liệu_IoT"]["Biển_số"] = profile.get("plate", "N/A")
                     multiplier = 0.8 if "rỗng" in truck_profile else 1.0
                     order["Chi_Phi_Chặng_Dài"] = order["Khối lượng"] * cfg["shipping_long_per_ton"] * multiplier
                     st.rerun()
@@ -485,7 +491,6 @@ else:
             completed_orders = [o for o in st.session_state.orders if o.get("Trạng thái") == "Hoàn tất"]
             total_gmv = sum(o.get("Tổng_Thực_Tế", 0) for o in completed_orders)
             
-            # Fix lỗi lấy nhầm biến cho biểu đồ của Admin
             total_fee_tx = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_Tx_Base", 0) for o in completed_orders)
             total_fee_log = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_Log", 0) for o in completed_orders)
             total_fee_qa = sum(o.get("Chi_Tiet_Phi", {}).get("Fee_QA", 0) for o in completed_orders)
